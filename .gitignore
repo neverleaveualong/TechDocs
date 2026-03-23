@@ -23,3 +23,10 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+
+# 개인 문서 (git 비공개)
+docs/INTERVIEW_PREP.md
+docs/RAG_CONCEPTS.md
+docs/CORE_CODE_TEMPLATES.md
+docs/PHASE0_GUIDE.md
+SETUP_PLAN.md
