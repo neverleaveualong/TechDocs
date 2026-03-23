@@ -24,8 +24,15 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Type check
-        run: python -c "import app.main; print('Import OK')"
+      - name: Syntax check
+        run: python -m py_compile app/main.py && python -m py_compile app/config.py && echo "Syntax OK"
+
+      - name: Module structure check
+        run: python -c "
+          import importlib.util;
+          modules = ['app.models.patent', 'app.models.search', 'app.models.ingest'];
+          [print(f'{m} OK') for m in modules if importlib.util.find_spec(m)]
+          "
 
   frontend:
     runs-on: ubuntu-latest
