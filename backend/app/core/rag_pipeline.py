@@ -28,12 +28,17 @@ class RAGPipeline:
 
         result = qa_chain.invoke({"query": query})
 
+        seen = set()
         sources = []
         for doc in result.get("source_documents", []):
+            app_num = doc.metadata.get("application_number", "")
+            if app_num in seen:
+                continue
+            seen.add(app_num)
             sources.append({
                 "invention_title": doc.metadata.get("invention_title", ""),
                 "applicant_name": doc.metadata.get("applicant_name", ""),
-                "application_number": doc.metadata.get("application_number", ""),
+                "application_number": app_num,
                 "application_date": doc.metadata.get("application_date", ""),
                 "relevance_text": doc.page_content[:200],
             })
