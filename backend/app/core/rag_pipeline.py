@@ -40,6 +40,7 @@ class RAGPipeline:
                 "applicant_name": doc.metadata.get("applicant_name", ""),
                 "application_number": app_num,
                 "application_date": doc.metadata.get("application_date", ""),
+                "register_status": doc.metadata.get("register_status", ""),
                 "relevance_text": doc.page_content[:200],
             })
 
