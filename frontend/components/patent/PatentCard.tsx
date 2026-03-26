@@ -7,6 +7,22 @@ interface PatentCardProps {
   index?: number;
 }
 
+function statusBadge(status: string) {
+  if (!status) return null;
+  const isRegistered = status === "등록";
+  return (
+    <span
+      className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+        isRegistered
+          ? "bg-green-50 text-green-700 border-green-200"
+          : "bg-gray-50 text-gray-500 border-gray-200"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
 export default function PatentCard({ patent, index }: PatentCardProps) {
   const date = patent.application_date
     ? `${patent.application_date.slice(0, 4)}.${patent.application_date.slice(4, 6)}.${patent.application_date.slice(6, 8)}`
@@ -23,9 +39,12 @@ export default function PatentCard({ patent, index }: PatentCardProps) {
 
       {/* 내용 */}
       <div className="flex-1 min-w-0">
-        <h4 className="text-[13px] font-semibold text-gray-900 leading-snug line-clamp-1 group-hover:text-teal-800 transition-colors">
-          {patent.invention_title || "제목 없음"}
-        </h4>
+        <div className="flex items-center gap-2">
+          <h4 className="text-[13px] font-semibold text-gray-900 leading-snug line-clamp-1 group-hover:text-teal-800 transition-colors">
+            {patent.invention_title || "제목 없음"}
+          </h4>
+          {statusBadge(patent.register_status)}
+        </div>
 
         <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
           <span className="flex items-center gap-1">

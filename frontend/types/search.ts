@@ -3,6 +3,7 @@ export interface PatentSource {
   applicant_name: string;
   application_number: string;
   application_date: string;
+  register_status: string;
   relevance_text: string;
 }
 
