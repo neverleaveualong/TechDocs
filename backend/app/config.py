@@ -2,12 +2,10 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Ollama (로컬 LLM)
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3"
-
-    # 임베딩 (로컬 HuggingFace)
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # OpenAI
+    openai_api_key: str
+    openai_model: str = "gpt-4o-mini"
+    openai_embedding_model: str = "text-embedding-3-small"
 
     # Pinecone
     pinecone_api_key: str
