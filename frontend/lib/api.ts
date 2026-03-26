@@ -31,6 +31,19 @@ export async function similaritySearch(query: string, topK: number = 5) {
   );
 }
 
+export async function getStats() {
+  return fetchApi<{
+    total_vectors: number;
+    dimension: number;
+    index_name: string;
+    companies: {
+      applicant: string;
+      patent_count: number;
+      vector_count: number;
+    }[];
+  }>("/api/stats");
+}
+
 export async function ingestPatents(
   applicant: string,
   pages: number = 5,
