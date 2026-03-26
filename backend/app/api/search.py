@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.core.rag_pipeline import rag_pipeline
+from app.core.rate_limit import limiter
 from app.models.search import (
     SearchRequest,
     SearchResponse,
@@ -12,12 +13,13 @@ router = APIRouter()
 
 
 @router.post("/", response_model=SearchResponse)
-async def search(request: SearchRequest):
-    """RAG 검색 — 자연어 질문 → AI 답변 + 출처 특허"""
+@limiter.limit("10/minute")
+async def search(request: Request, body: SearchRequest):
+    """RAG 검색 — 자연어 질문 → AI 답변 + 출처 특허 (분당 10회 제한)"""
     try:
         result = rag_pipeline.search(
-            query=request.query,
-            top_k=request.top_k,
+            query=body.query,
+            top_k=body.top_k,
         )
         return result
     except Exception as e:
@@ -25,12 +27,13 @@ async def search(request: SearchRequest):
 
 
 @router.post("/similar", response_model=SimilarityResponse)
-async def similarity_search(request: SimilarityRequest):
-    """유사도 검색 — LLM 답변 없이 관련 문서만 반환"""
+@limiter.limit("10/minute")
+async def similarity_search(request: Request, body: SimilarityRequest):
+    """유사도 검색 — LLM 답변 없이 관련 문서만 반환 (분당 10회 제한)"""
     try:
         results = rag_pipeline.similarity_search(
-            query=request.query,
-            top_k=request.top_k,
+            query=body.query,
+            top_k=body.top_k,
         )
         return {"results": results}
     except Exception as e:
