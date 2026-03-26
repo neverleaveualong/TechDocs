@@ -13,31 +13,38 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.ingestion.pipeline import ingest_patents
+from app.core.vectorstore import delete_all_documents
 
 
 SEED_COMPANIES = [
-    "삼성전자",
-    "LG에너지솔루션",
-    "현대자동차",
-    "SK하이닉스",
-    "카카오",
-    "네이버",
     "더존비즈온",
+    "삼성전자",
+    "에스케이하이닉스",
+    "현대자동차",
+    "엘지에너지솔루션",
 ]
+
+START_DATE = "20210101"
+END_DATE = "20251231"
 
 
 async def seed():
+    print("기존 데이터 전체 삭제 중...")
+    delete_all_documents()
+
     total_patents = 0
     total_vectors = 0
 
     for company in SEED_COMPANIES:
         print(f"\n{'='*50}")
-        print(f"수집 중: {company}")
+        print(f"수집 중: {company} ({START_DATE}~{END_DATE})")
         print(f"{'='*50}")
 
         result = await ingest_patents(
             applicant=company,
-            pages=2,  # 회사당 ~40건
+            start_date=START_DATE,
+            end_date=END_DATE,
+            pages=5,  # 회사당 ~100건
         )
 
         patents = result.get("patents_collected", 0)

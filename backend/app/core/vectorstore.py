@@ -25,3 +25,11 @@ def add_documents(documents):
     vectorstore = get_vectorstore()
     vectorstore.add_documents(documents)
     return len(documents)
+
+
+def delete_all_documents():
+    """Pinecone 인덱스 전체 삭제"""
+    pc = Pinecone(api_key=settings.pinecone_api_key)
+    index = pc.Index(settings.pinecone_index_name)
+    index.delete(delete_all=True)
+    print("Pinecone 인덱스 전체 삭제 완료")

@@ -38,11 +38,10 @@ class KiprisClient:
             response.raise_for_status()
 
         data = xmltodict.parse(response.text)
-
-        # 응답 구조 파싱
-        body = data.get("response", {}).get("body", {})
-        total_count = int(body.get("items", {}).get("totalCount", 0) or 0)
-        items = body.get("items", {}).get("item", [])
+        body = data.get("response", {}).get("body") or {}
+        items_block = body.get("items") or {}
+        total_count = int(items_block.get("totalCount", 0) or 0)
+        items = items_block.get("item", []) or []
 
         # 단건이면 리스트로 래핑
         if isinstance(items, dict):
@@ -51,13 +50,13 @@ class KiprisClient:
         # PatentItem으로 변환
         patents = [
             PatentItem(
-                application_number=item.get("applicationNumber", ""),
-                invention_title=item.get("inventionTitle", ""),
-                applicant_name=item.get("applicantName", ""),
-                ipc_number=item.get("ipcNumber", ""),
-                application_date=item.get("applicationDate", ""),
-                register_status=item.get("registerStatus", ""),
-                abstract=item.get("astrtCont", ""),
+                application_number=item.get("applicationNumber") or "",
+                invention_title=item.get("inventionTitle") or "",
+                applicant_name=item.get("applicantName") or "",
+                ipc_number=item.get("ipcNumber") or "",
+                application_date=item.get("applicationDate") or "",
+                register_status=item.get("registerStatus") or "",
+                abstract=item.get("astrtCont") or item.get("inventionTitle") or "",
             )
             for item in items
             if item.get("inventionTitle")
