@@ -1,26 +1,53 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url('https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css');
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-brand-50: #e8f0fe;
+  --color-brand-100: #c5d9fc;
+  --color-brand-200: #9ebef9;
+  --color-brand-300: #6da0f5;
+  --color-brand-400: #4688f1;
+  --color-brand-500: #1a6de0;
+  --color-brand-600: #0d56c4;
+  --color-brand-700: #003f9e;
+  --color-brand-800: #003675;
+  --color-brand-900: #002652;
+  --color-teal: #2dd4bf;
+  --color-teal-50: #f0fdfa;
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+  --color-teal-700: #0f766e;
+  --color-teal-800: #115e59;
+  --color-teal-900: #134e4a;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #f9fafb;
+  -webkit-font-smoothing: antialiased;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in   { animation: fadeIn 0.3s ease both; }
+.animate-fade-in-1 { animation: fadeIn 0.3s ease 0.08s both; }
+.animate-fade-in-2 { animation: fadeIn 0.3s ease 0.16s both; }
+.animate-fade-in-3 { animation: fadeIn 0.3s ease 0.24s both; }
+.animate-slide-up   { animation: slideUp 0.5s ease both; }
+.animate-slide-up-1 { animation: slideUp 0.5s ease 0.1s both; }
+.animate-slide-up-2 { animation: slideUp 0.5s ease 0.2s both; }
+.animate-slide-up-3 { animation: slideUp 0.5s ease 0.3s both; }
