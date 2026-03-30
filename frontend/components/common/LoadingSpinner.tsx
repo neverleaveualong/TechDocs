@@ -36,17 +36,6 @@ export default function LoadingSpinner({ message = "로딩 중..." }: { message?
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-      {/* 프로그레스 바 (불확정 — 끝까지 안 감) */}
-      <div className="h-1 bg-gray-100 overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-teal-400 to-teal-500 rounded-full"
-          style={{
-            width: `${Math.min(30 + elapsed * 0.5, 92)}%`,
-            transition: "width 1s linear",
-          }}
-        />
-      </div>
-
       <div className="p-5 sm:p-6">
         {/* 메인 */}
         <div className="flex items-center gap-4">
