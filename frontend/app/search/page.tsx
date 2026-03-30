@@ -57,7 +57,7 @@ export default function SearchPage() {
                 RAG
               </span>
               <span className="px-2 py-1 bg-gray-50 text-gray-500 rounded-md font-medium border border-gray-100">
-                llama3
+                GPT-4o-mini
               </span>
               <span className="px-2 py-1 bg-gray-50 text-gray-500 rounded-md font-medium border border-gray-100">
                 Pinecone
@@ -140,7 +140,7 @@ export default function SearchPage() {
                 </div>
                 <h4 className="text-sm font-bold text-gray-900 mb-1">AI 답변 생성</h4>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  llama3가 검색된 특허를 분석하고 종합적인 답변을 생성합니다
+                  GPT-4o-mini가 검색된 특허를 분석하고 종합적인 답변을 생성합니다
                 </p>
               </div>
               <div className="p-8 text-center">
@@ -156,7 +156,7 @@ export default function SearchPage() {
             <div className="border-t border-gray-100 bg-gray-50/50 px-8 py-4 text-center">
               <p className="text-[11px] text-gray-400">
                 <i className="ri-time-line mr-1" />
-                로컬 LLM 특성상 검색에 약 1~2분이 소요됩니다
+                RAG 파이프라인 처리에 약 10~30초가 소요됩니다
               </p>
             </div>
           </div>
