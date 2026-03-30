@@ -2,19 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getStats } from "@/lib/api";
-
-interface CompanyStats {
-  applicant: string;
-  patent_count: number;
-  vector_count: number;
-}
-
-interface Stats {
-  total_vectors: number;
-  dimension: number;
-  index_name: string;
-  companies: CompanyStats[];
-}
+import type { Stats } from "@/types/stats";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);

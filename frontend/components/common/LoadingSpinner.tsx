@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 
 const tips = [
   "Pinecone에서 코사인 유사도로 관련 특허를 검색하고 있습니다",
-  "검색된 특허 청크를 llama3에 전달하고 있습니다",
-  "llama3가 특허 내용을 분석하고 답변을 생성하고 있습니다",
-  "로컬 LLM 특성상 답변 생성에 시간이 걸릴 수 있습니다",
+  "검색된 특허 청크를 GPT-4o-mini에 전달하고 있습니다",
+  "GPT-4o-mini가 특허 내용을 분석하고 답변을 생성하고 있습니다",
+  "RAG 파이프라인 처리 중입니다, 잠시만 기다려주세요",
   "거의 다 되었습니다, 잠시만 기다려주세요",
 ];
 
@@ -36,17 +36,6 @@ export default function LoadingSpinner({ message = "로딩 중..." }: { message?
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-      {/* 프로그레스 바 (불확정 — 끝까지 안 감) */}
-      <div className="h-1 bg-gray-100 overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-teal-400 to-teal-500 rounded-full"
-          style={{
-            width: `${Math.min(30 + elapsed * 0.5, 92)}%`,
-            transition: "width 1s linear",
-          }}
-        />
-      </div>
-
       <div className="p-5 sm:p-6">
         {/* 메인 */}
         <div className="flex items-center gap-4">
@@ -70,8 +59,7 @@ export default function LoadingSpinner({ message = "로딩 중..." }: { message?
         <div className="mt-4 flex items-center gap-2 px-3.5 py-2.5 bg-gray-50 border border-gray-100 rounded-lg">
           <i className="ri-time-line text-gray-400 text-sm shrink-0" />
           <p className="text-[11px] text-gray-500">
-            로컬 LLM(llama3) 특성상 <span className="font-semibold text-gray-700">약 1~2분</span> 소요됩니다.
-            벡터 검색 → 청크 추출 → AI 답변 생성 순서로 처리 중입니다.
+            벡터 검색 → 청크 추출 → AI 답변 생성 순서로 처리되며, <span className="font-semibold text-gray-700">약 10~30초</span> 소요됩니다.
           </p>
         </div>
 
@@ -80,7 +68,7 @@ export default function LoadingSpinner({ message = "로딩 중..." }: { message?
           <div className="mt-3 flex items-center gap-2 px-3.5 py-2.5 bg-amber-50 border border-amber-100 rounded-lg animate-fade-in">
             <i className="ri-information-line text-amber-500 text-sm shrink-0" />
             <p className="text-[11px] text-amber-700">
-              평소보다 시간이 걸리고 있습니다. llama3 모델 로딩이나 서버 상태에 따라 더 걸릴 수 있습니다.
+              평소보다 시간이 걸리고 있습니다. 서버 상태에 따라 더 걸릴 수 있습니다.
             </p>
           </div>
         )}
