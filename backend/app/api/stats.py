@@ -14,21 +14,23 @@ async def get_stats():
         index = pc.Index(settings.pinecone_index_name)
         stats = index.describe_index_stats()
 
-        total_vectors = stats.get("total_vector_count", 0)
+        # 기본(namespace="")만 통계 추출 — 실험용 namespace 제외
+        default_ns = stats.get("namespaces", {}).get("", {})
+        total_vectors = default_ns.get("vector_count", stats.get("total_vector_count", 0))
         dimension = stats.get("dimension", 0)
 
         # 벡터 ID 목록 → 메타데이터 fetch → 회사별 집계
         companies = {}
         if total_vectors > 0:
-            # 모든 벡터 ID 수집 (페이지네이션)
+            # 기본 namespace의 벡터 ID만 수집
             all_ids = []
-            for ids_chunk in index.list():
+            for ids_chunk in index.list(namespace=""):
                 all_ids.extend(ids_chunk)
 
             # 100개씩 배치로 메타데이터 fetch
             for i in range(0, len(all_ids), 100):
                 batch_ids = all_ids[i:i + 100]
-                fetched = index.fetch(ids=batch_ids)
+                fetched = index.fetch(ids=batch_ids, namespace="")
                 for vec in fetched.get("vectors", {}).values():
                     meta = vec.get("metadata", {})
                     applicant = meta.get("applicant_name", "알 수 없음")

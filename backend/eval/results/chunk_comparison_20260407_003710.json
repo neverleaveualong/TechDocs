@@ -1,0 +1,38 @@
+[
+  {
+    "params": "500/50",
+    "chunk_size": 500,
+    "chunk_overlap": 50,
+    "num_chunks": 38,
+    "metrics": {
+      "faithfulness": 0.7327840909090909,
+      "answer_relevancy": 0.41074321092499294,
+      "context_precision": 0.9400694443820583,
+      "context_recall": 0.9875
+    }
+  },
+  {
+    "params": "800/100",
+    "chunk_size": 800,
+    "chunk_overlap": 100,
+    "num_chunks": 25,
+    "metrics": {
+      "faithfulness": 0.8088916230827994,
+      "answer_relevancy": 0.4157252911008106,
+      "context_precision": 0.9629166666032741,
+      "context_recall": 1.0
+    }
+  },
+  {
+    "params": "1000/200",
+    "chunk_size": 1000,
+    "chunk_overlap": 200,
+    "num_chunks": 25,
+    "metrics": {
+      "faithfulness": 0.715546802054155,
+      "answer_relevancy": 0.3902055043617331,
+      "context_precision": 0.9479861110496313,
+      "context_recall": 1.0
+    }
+  }
+]

@@ -10,3 +10,6 @@ python-dotenv==1.0.1
 xmltodict==0.14.1
 python-multipart==0.0.20
 slowapi==0.1.9
+ragas==0.2.14
+datasets==3.2.0
+numpy
