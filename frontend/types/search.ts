@@ -11,6 +11,20 @@ export interface SearchResponse {
   answer: string;
   sources: PatentSource[];
   query: string;
+  query_log_id?: number;
+}
+
+export interface FeedbackCreate {
+  query_log_id: number;
+  rating: number;
+  comment?: string;
+}
+
+export interface FeedbackStats {
+  total_queries: number;
+  total_feedbacks: number;
+  positive_rate: number;
+  recent_negative_queries: { id: number; query: string; answer: string }[];
 }
 
 export interface SimilarityResult {
