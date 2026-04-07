@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-04-06T23:08:14.173781",
+  "type": "baseline",
+  "metrics": {
+    "faithfulness": 0.394965483234714,
+    "answer_relevancy": 0.2645412203288335,
+    "context_precision": 0.5481987846869453,
+    "context_recall": 0.4666666666666667
+  },
+  "num_questions": 65,
+  "source_counts": {
+    "manual": 15,
+    "synthetic": 32
+  }
+}

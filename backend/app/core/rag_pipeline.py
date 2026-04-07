@@ -9,13 +9,13 @@ class RAGPipeline:
     """RAG 파이프라인 — 벡터 검색 + LLM 답변 생성"""
 
     def __init__(self):
-        self.vectorstore = get_vectorstore()
         self.llm = get_llm()
 
-    def search(self, query: str, top_k: int = 5) -> dict:
+    def search(self, query: str, top_k: int = 5, namespace: str = None) -> dict:
         """RAG 검색: 질문 → 유사 문서 검색 → LLM 답변 생성"""
-        retriever = self.vectorstore.as_retriever(
-            search_kwargs={"k": top_k}
+        vectorstore = get_vectorstore(namespace=namespace)
+        retriever = vectorstore.as_retriever(
+            search_kwargs={"k": top_k, "namespace": namespace}
         )
 
         qa_chain = RetrievalQA.from_chain_type(
@@ -42,6 +42,7 @@ class RAGPipeline:
                 "application_date": doc.metadata.get("application_date", ""),
                 "register_status": doc.metadata.get("register_status", ""),
                 "relevance_text": doc.page_content[:200],
+                "full_content": doc.page_content,
             })
 
         return {
@@ -50,9 +51,10 @@ class RAGPipeline:
             "query": query,
         }
 
-    def similarity_search(self, query: str, top_k: int = 5) -> list[dict]:
+    def similarity_search(self, query: str, top_k: int = 5, namespace: str = None) -> list[dict]:
         """유사 문서만 검색 (LLM 답변 없이)"""
-        results = self.vectorstore.similarity_search_with_score(query, k=top_k)
+        vectorstore = get_vectorstore(namespace=namespace)
+        results = vectorstore.similarity_search_with_score(query, k=top_k)
 
         return [
             {
