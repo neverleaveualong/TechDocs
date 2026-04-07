@@ -1,0 +1,50 @@
+[
+  {
+    "timestamp": "2026-04-07T13:35:40.378653",
+    "type": "hybrid_comparison",
+    "label": "Vector Only",
+    "config": {
+      "use_hybrid": false,
+      "use_reranker": false
+    },
+    "metrics": {
+      "faithfulness": 0.7194,
+      "answer_relevancy": 0.3051,
+      "context_precision": 0.735,
+      "context_recall": 0.9
+    },
+    "num_questions": 10
+  },
+  {
+    "timestamp": "2026-04-07T13:39:26.006631",
+    "type": "hybrid_comparison",
+    "label": "Hybrid (BM25+Vector+RRF)",
+    "config": {
+      "use_hybrid": true,
+      "use_reranker": false
+    },
+    "metrics": {
+      "faithfulness": 0.7353,
+      "answer_relevancy": 0.2646,
+      "context_precision": 0.9589,
+      "context_recall": 1.0
+    },
+    "num_questions": 10
+  },
+  {
+    "timestamp": "2026-04-07T13:43:34.653119",
+    "type": "hybrid_comparison",
+    "label": "Hybrid + Reranker",
+    "config": {
+      "use_hybrid": true,
+      "use_reranker": true
+    },
+    "metrics": {
+      "faithfulness": 0.4834,
+      "answer_relevancy": 0.1637,
+      "context_precision": 0.4589,
+      "context_recall": 0.4
+    },
+    "num_questions": 10
+  }
+]
