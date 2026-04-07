@@ -2,10 +2,10 @@
 
 const pipelineSteps = [
   { icon: "ri-question-line", label: "질문 입력", desc: "사용자가 자연어로 질문을 입력합니다." },
-  { icon: "ri-cpu-line", label: "벡터 변환", desc: "HuggingFace 모델로 질문을 384차원 벡터로 변환합니다." },
+  { icon: "ri-cpu-line", label: "벡터 변환", desc: "OpenAI text-embedding-3-small 모델로 질문을 1536차원 벡터로 변환합니다." },
   { icon: "ri-search-line", label: "유사도 검색", desc: "Pinecone에서 코사인 유사도 기반으로 관련 청크를 검색합니다." },
   { icon: "ri-file-text-line", label: "청크 추출", desc: "유사도가 높은 상위 5개 특허 청크를 추출합니다." },
-  { icon: "ri-robot-line", label: "AI 답변 생성", desc: "추출된 청크를 컨텍스트로 llama3가 답변을 생성합니다." },
+  { icon: "ri-robot-line", label: "AI 답변 생성", desc: "추출된 청크를 컨텍스트로 GPT-4o-mini가 답변을 생성합니다." },
 ];
 
 const techStack = [
@@ -13,11 +13,11 @@ const techStack = [
     { name: "KIPRIS API", desc: "한국 특허정보 공공 API", icon: "ri-global-line" },
   ]},
   { category: "임베딩 & 벡터 DB", items: [
-    { name: "all-MiniLM-L6-v2", desc: "HuggingFace 384차원 임베딩 모델 (로컬 실행)", icon: "ri-cpu-line" },
+    { name: "text-embedding-3-small", desc: "OpenAI 1536차원 임베딩 모델", icon: "ri-cpu-line" },
     { name: "Pinecone", desc: "관리형 벡터 데이터베이스, 코사인 유사도 검색", icon: "ri-database-2-line" },
   ]},
   { category: "LLM & 프레임워크", items: [
-    { name: "llama3 8B", desc: "Ollama 로컬 실행 LLM, 답변 생성 담당", icon: "ri-robot-line" },
+    { name: "GPT-4o-mini", desc: "OpenAI API 기반 LLM, 답변 생성 담당", icon: "ri-robot-line" },
     { name: "LangChain", desc: "RAG 파이프라인 오케스트레이션 프레임워크", icon: "ri-code-line" },
   ]},
   { category: "백엔드 & 프론트엔드", items: [
@@ -30,7 +30,7 @@ const faqs = [
   { q: "검색 결과가 없으면 어떻게 하나요?", a: "먼저 '데이터 수집' 페이지에서 해당 기업의 특허를 수집해주세요. 수집 후 벡터 DB에 데이터가 저장되면 검색이 가능합니다." },
   { q: "어떤 질문을 해야 좋은 결과를 얻나요?", a: "구체적인 기술 키워드를 포함해주세요. 예: '2차전지 열 관리 기술', 'ERP 클라우드 마이그레이션' 등 기술 분야를 명시하면 더 정확한 결과를 얻을 수 있습니다." },
   { q: "데이터 수집 시 회사명은 어떻게 입력하나요?", a: "KIPRIS에 등록된 공식 법인명을 사용하세요. 예: 삼성전자, 에스케이하이닉스, 엘지에너지솔루션, 더존비즈온" },
-  { q: "임베딩은 어떤 모델을 사용하나요?", a: "HuggingFace의 all-MiniLM-L6-v2 모델을 로컬에서 실행합니다. 384차원 벡터로 변환하여 Pinecone에 저장합니다." },
+  { q: "임베딩은 어떤 모델을 사용하나요?", a: "OpenAI의 text-embedding-3-small 모델을 사용합니다. 1536차원 벡터로 변환하여 Pinecone에 저장합니다." },
 ];
 
 export default function HelpPage() {

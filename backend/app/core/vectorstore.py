@@ -8,21 +8,22 @@ from app.core.embeddings import get_embeddings
 _vectorstore = None
 
 
-def get_vectorstore():
-    """Pinecone 벡터스토어 연결"""
+def get_vectorstore(namespace=None):
+    """Pinecone 벡터스토어 연결 (네임스페이스 지원)"""
     global _vectorstore
-    if _vectorstore is None:
-        pc = Pinecone(api_key=settings.pinecone_api_key)
-        _vectorstore = PineconeVectorStore(
-            index=pc.Index(settings.pinecone_index_name),
-            embedding=get_embeddings(),
-        )
-    return _vectorstore
+    pc = Pinecone(api_key=settings.pinecone_api_key)
+    
+    # 랑체인 인스턴스 반환
+    return PineconeVectorStore(
+        index=pc.Index(settings.pinecone_index_name),
+        embedding=get_embeddings(),
+        namespace=namespace,
+    )
 
 
-def add_documents(documents):
-    """문서를 Pinecone에 추가 (임베딩 자동 생성)"""
-    vectorstore = get_vectorstore()
+def add_documents(documents, namespace=None):
+    """문서를 Pinecone에 추가 (네임스페이스 지원)"""
+    vectorstore = get_vectorstore(namespace=namespace)
     vectorstore.add_documents(documents)
     return len(documents)
 

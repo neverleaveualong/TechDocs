@@ -2,19 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getStats } from "@/lib/api";
-
-interface CompanyStats {
-  applicant: string;
-  patent_count: number;
-  vector_count: number;
-}
-
-interface Stats {
-  total_vectors: number;
-  dimension: number;
-  index_name: string;
-  companies: CompanyStats[];
-}
+import type { Stats } from "@/types/stats";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -137,25 +125,13 @@ export default function DashboardPage() {
         {stats && (
           <>
             {/* 통계 카드 4개 */}
-            <div className="animate-fade-in grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white border border-gray-100 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm">
-                    <i className="ri-database-2-line text-white text-base" />
-                  </div>
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="실시간" />
-                </div>
-                <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-teal-700 leading-none">
-                  {stats.total_vectors.toLocaleString()}
-                </div>
-                <div className="text-xs font-semibold text-gray-600 mt-2">저장된 벡터</div>
-              </div>
-
+            <div className="animate-fade-in grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="bg-white border border-gray-100 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
                     <i className="ri-file-text-line text-white text-base" />
                   </div>
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="실시간" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-blue-700 leading-none">
                   {totalPatents.toLocaleString()}
@@ -174,18 +150,6 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-xs font-semibold text-gray-600 mt-2">수집 기업</div>
               </div>
-
-              <div className="bg-white border border-gray-100 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-600 to-brand-700 flex items-center justify-center shadow-sm">
-                    <i className="ri-ruler-line text-white text-base" />
-                  </div>
-                </div>
-                <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-brand-700 leading-none">
-                  {stats.dimension}
-                </div>
-                <div className="text-xs font-semibold text-gray-600 mt-2">임베딩 차원</div>
-              </div>
             </div>
 
             {/* 회사별 수집 현황 */}
@@ -199,21 +163,20 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="hidden sm:grid grid-cols-12 gap-4 px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold text-gray-500">
-                  <div className="col-span-5">기업명</div>
-                  <div className="col-span-3 text-right">특허 건수</div>
-                  <div className="col-span-4 text-right">벡터 수</div>
+                  <div className="col-span-8">기업명</div>
+                  <div className="col-span-4 text-right">특허 건수</div>
                 </div>
 
                 <div className="divide-y divide-gray-50">
                   {(showAll ? stats.companies : stats.companies.slice(0, 5)).map((company, i) => {
-                    const maxVectors = stats.companies[0]?.vector_count || 1;
-                    const pct = (company.vector_count / maxVectors) * 100;
+                    const maxPatents = stats.companies[0]?.patent_count || 1;
+                    const pct = (company.patent_count / maxPatents) * 100;
                     return (
                       <div
                         key={company.applicant}
                         className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition-colors"
                       >
-                        <div className="sm:col-span-5 flex items-center gap-3">
+                        <div className="sm:col-span-8 flex items-center gap-3">
                           <span className="w-6 h-6 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-sm">
                             {i + 1}
                           </span>
@@ -230,16 +193,11 @@ export default function DashboardPage() {
 
                         <div className="sm:hidden flex items-center gap-3 pl-9 text-xs text-gray-500">
                           <span>특허 <span className="font-semibold text-gray-700">{company.patent_count.toLocaleString()}</span>건</span>
-                          <span>벡터 <span className="font-semibold text-teal-700">{company.vector_count.toLocaleString()}</span>개</span>
                         </div>
 
-                        <div className="hidden sm:flex col-span-3 items-center justify-end">
+                        <div className="hidden sm:flex col-span-4 items-center justify-end">
                           <span className="text-sm font-bold text-gray-900">{company.patent_count.toLocaleString()}</span>
                           <span className="text-[10px] text-gray-400 ml-1">건</span>
-                        </div>
-                        <div className="hidden sm:flex col-span-4 items-center justify-end">
-                          <span className="text-sm font-bold text-teal-700">{company.vector_count.toLocaleString()}</span>
-                          <span className="text-[10px] text-gray-400 ml-1">개</span>
                         </div>
                       </div>
                     );
@@ -275,7 +233,7 @@ export default function DashboardPage() {
                 <div>
                   <div className="text-sm font-semibold text-gray-900">{stats.index_name}</div>
                   <div className="text-[11px] text-gray-400">
-                    Pinecone 인덱스 · {stats.dimension}차원 · all-MiniLM-L6-v2
+                    Pinecone 인덱스 · OpenAI text-embedding-3-small
                   </div>
                 </div>
               </div>

@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import type { SearchResponse, SimilarityResponse } from "@/types/search";
+import type { Stats } from "@/types/stats";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://techdocs-1v4q.onrender.com";
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -15,33 +18,32 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function searchPatents(query: string, topK: number = 5) {
-  return fetchApi<import("@/types/search").SearchResponse>("/api/search", {
+  return fetchApi<SearchResponse>("/api/search/search", {
     method: "POST",
     body: JSON.stringify({ query, top_k: topK }),
   });
 }
 
+export async function submitFeedback(queryLogId: number, rating: number, comment?: string) {
+  return fetchApi<{ id: number }>("/api/feedback", {
+    method: "POST",
+    body: JSON.stringify({ query_log_id: queryLogId, rating, comment }),
+  });
+}
+
+export async function getFeedbackStats() {
+  return fetchApi<import("@/types/search").FeedbackStats>("/api/feedback/stats");
+}
+
 export async function similaritySearch(query: string, topK: number = 5) {
-  return fetchApi<import("@/types/search").SimilarityResponse>(
-    "/api/search/similar",
-    {
-      method: "POST",
-      body: JSON.stringify({ query, top_k: topK }),
-    }
-  );
+  return fetchApi<SimilarityResponse>("/api/search/similarity", {
+    method: "POST",
+    body: JSON.stringify({ query, top_k: topK }),
+  });
 }
 
 export async function getStats() {
-  return fetchApi<{
-    total_vectors: number;
-    dimension: number;
-    index_name: string;
-    companies: {
-      applicant: string;
-      patent_count: number;
-      vector_count: number;
-    }[];
-  }>("/api/stats");
+  return fetchApi<Stats>("/api/stats/");
 }
 
 export async function ingestPatents(

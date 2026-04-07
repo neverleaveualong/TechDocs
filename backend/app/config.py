@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # CORS
     frontend_url: str = "http://localhost:3000"
 
+    # RAGAS 평가
+    eval_model: str = "gpt-4o-mini"
+    eval_embedding_model: str = "text-embedding-3-small"
+
     class Config:
         env_file = ".env"
 
