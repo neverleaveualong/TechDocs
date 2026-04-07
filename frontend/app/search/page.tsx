@@ -106,7 +106,7 @@ export default function SearchPage() {
 
           {result && (
             <div className="space-y-4 animate-fade-in">
-              <AiAnswer answer={result.answer} query={result.query} />
+              <AiAnswer answer={result.answer} query={result.query} queryLogId={result.query_log_id} />
               <SearchResults sources={result.sources} />
               <div className="flex justify-center">
                 <button
