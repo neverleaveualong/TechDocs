@@ -20,6 +20,7 @@ class SearchResponse(BaseModel):
     answer: str
     sources: list[PatentSource]
     query: str
+    query_log_id: int | None = None
 
 
 class SimilarityRequest(BaseModel):
