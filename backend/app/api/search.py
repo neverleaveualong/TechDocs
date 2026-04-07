@@ -20,6 +20,8 @@ async def search(request: Request, body: SearchRequest):
         result = rag_pipeline.search(
             query=body.query,
             top_k=body.top_k,
+            use_hybrid=body.use_hybrid,
+            use_reranker=body.use_reranker,
         )
         return result
     except Exception as e:
