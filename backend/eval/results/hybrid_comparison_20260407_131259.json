@@ -1,0 +1,35 @@
+[
+  {
+    "timestamp": "2026-04-07T13:05:40.306873",
+    "type": "hybrid_comparison",
+    "label": "Vector Only",
+    "config": {
+      "use_hybrid": false,
+      "use_reranker": false
+    },
+    "metrics": {},
+    "num_questions": 10
+  },
+  {
+    "timestamp": "2026-04-07T13:09:33.332230",
+    "type": "hybrid_comparison",
+    "label": "Hybrid (BM25+Vector+RRF)",
+    "config": {
+      "use_hybrid": true,
+      "use_reranker": false
+    },
+    "metrics": {},
+    "num_questions": 10
+  },
+  {
+    "timestamp": "2026-04-07T13:12:59.657524",
+    "type": "hybrid_comparison",
+    "label": "Hybrid + Reranker",
+    "config": {
+      "use_hybrid": true,
+      "use_reranker": true
+    },
+    "metrics": {},
+    "num_questions": 10
+  }
+]
