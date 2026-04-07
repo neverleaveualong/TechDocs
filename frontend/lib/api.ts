@@ -36,14 +36,14 @@ export async function getFeedbackStats() {
 }
 
 export async function similaritySearch(query: string, topK: number = 5) {
-  return fetchApi<SimilarityResponse>("/api/search/similar", {
+  return fetchApi<SimilarityResponse>("/api/search/similarity", {
     method: "POST",
     body: JSON.stringify({ query, top_k: topK }),
   });
 }
 
 export async function getStats() {
-  return fetchApi<Stats>("/api/stats");
+  return fetchApi<Stats>("/api/stats/");
 }
 
 export async function ingestPatents(
