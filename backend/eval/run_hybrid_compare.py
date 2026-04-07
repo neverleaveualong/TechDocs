@@ -12,8 +12,13 @@ import asyncio
 import json
 import time
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
+
+# .env 로딩 (프로젝트 루트)
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # 경로 설정
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -28,13 +33,17 @@ async def run_experiment():
     # 테스트셋 로드
     testset_path = results_dir / "chunk_testset_20260407_003710.json"
     if not testset_path.exists():
-        print("테스트셋이 없습니다. run_chunk_compare.py를 먼저 실행하세요.")
+        print("테스트셋이 없습니다. run_chunk_compare.py를 먼저 실행하세요.", flush=True)
         return
 
     with open(testset_path, "r", encoding="utf-8") as f:
         testset = json.load(f)
 
-    print(f"테스트셋: {len(testset)}개 질문")
+    # 빠른 테스트를 위해 상위 10개만 사용 (필요시 전체로 변경)
+    MAX_QUESTIONS = 10
+    testset = testset[:MAX_QUESTIONS]
+
+    print(f"테스트셋: {len(testset)}개 질문", flush=True)
     print()
 
     # 실험 설정
@@ -47,17 +56,18 @@ async def run_experiment():
     all_results = []
 
     for exp in experiments:
-        print(f"{'='*60}")
-        print(f"실험: {exp['label']}")
-        print(f"{'='*60}")
+        print(f"{'='*60}", flush=True)
+        print(f"실험: {exp['label']}", flush=True)
+        print(f"{'='*60}", flush=True)
 
         pipeline = RAGPipeline()
+
         eval_data = {"question": [], "answer": [], "contexts": [], "ground_truth": []}
 
         for i, item in enumerate(testset):
             q = item["question"]
             gt = item.get("ground_truth", item.get("answer", ""))
-            print(f"  [{i+1}/{len(testset)}] {q[:50]}...")
+            print(f"  [{i+1}/{len(testset)}] {q[:50]}...", flush=True)
 
             try:
                 result = pipeline.search(
@@ -76,13 +86,13 @@ async def run_experiment():
                 eval_data["ground_truth"].append(gt)
 
             except Exception as e:
-                print(f"    오류: {e}")
+                print(f"    오류: {e}", flush=True)
                 continue
 
-        print(f"  수집 완료: {len(eval_data['question'])}개")
+        print(f"  수집 완료: {len(eval_data['question'])}개", flush=True)
 
         # RAGAS 평가
-        print("  RAGAS 평가 중...")
+        print("  RAGAS 평가 중...", flush=True)
         try:
             from datasets import Dataset
             from ragas import evaluate
@@ -104,11 +114,18 @@ async def run_experiment():
                 embeddings=evaluator_embeddings,
             )
 
-            metrics = {k: round(float(v), 4) for k, v in scores.items()}
-            print(f"  결과: {metrics}")
+            # EvaluationResult → dict 변환 (to_pandas 사용)
+            df = scores.to_pandas()
+            # 숫자형 컬럼만 평균 계산
+            metrics = {}
+            metric_names = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+            for col in metric_names:
+                if col in df.columns:
+                    metrics[col] = round(float(df[col].mean()), 4)
+            print(f"  결과: {metrics}", flush=True)
 
         except Exception as e:
-            print(f"  RAGAS 평가 오류: {e}")
+            print(f"  RAGAS 평가 오류: {e}", flush=True)
             metrics = {}
 
         result_data = {

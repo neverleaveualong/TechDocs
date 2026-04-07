@@ -12,7 +12,7 @@ from app.core.embeddings import get_embeddings
 logger = logging.getLogger(__name__)
 
 
-def _ tokenize_korean(text: str) -> list[str]:
+def _tokenize_korean(text: str) -> list[str]:
     """한국어 + 영문 혼합 텍스트 토큰화 (간이 버전)
     
     정규식 기반으로 공백/구두점 분리. 

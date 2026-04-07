@@ -19,7 +19,7 @@ class RAGPipeline:
         query: str,
         top_k: int = 5,
         namespace: str = None,
-        use_hybrid: bool = False,
+        use_hybrid: bool = True,
         use_reranker: bool = False,
     ) -> dict:
         """RAG 검색: 질문 → 검색 → (선택) Rerank → LLM 답변 생성
