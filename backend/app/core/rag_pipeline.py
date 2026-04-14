@@ -39,7 +39,7 @@ class RAGPipeline:
             source_documents = self._vector_search(query, top_k=top_k, namespace=namespace)
 
         # LLM으로 답변 생성
-        context_text = "\n\n".join(doc.page_content for doc in source_documents)
+        context_text = self._build_context(source_documents)
         prompt_value = SEARCH_PROMPT.invoke({"context": context_text, "question": query})
         answer = self.llm.invoke(prompt_value)
 
@@ -66,6 +66,26 @@ class RAGPipeline:
             "sources": sources,
             "query": query,
         }
+
+    def _build_context(self, docs: list[Document]) -> str:
+        """문서에 메타데이터 헤더를 붙여 LLM에 전달할 context 생성
+
+        프롬프트가 출원번호/발명명칭/출원인을 요구하므로,
+        각 chunk 앞에 metadata를 명시적으로 포함시켜 할루시네이션 방지.
+        """
+        blocks = []
+        for doc in docs:
+            meta = doc.metadata
+            header = (
+                f"[특허 정보]\n"
+                f"- 출원번호: {meta.get('application_number', '정보 없음')}\n"
+                f"- 발명의 명칭: {meta.get('invention_title', '정보 없음')}\n"
+                f"- 출원인: {meta.get('applicant_name', '정보 없음')}\n"
+                f"- 출원일: {meta.get('application_date', '정보 없음')}\n"
+                f"- 등록상태: {meta.get('register_status', '정보 없음')}"
+            )
+            blocks.append(f"{header}\n\n[문서 내용]\n{doc.page_content}")
+        return "\n\n---\n\n".join(blocks)
 
     def _vector_search(self, query: str, top_k: int = 5, namespace: str = None) -> list[Document]:
         """기존 Vector-only 검색 (RetrievalQA 호환)"""
