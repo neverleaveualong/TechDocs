@@ -46,8 +46,15 @@ def run_rag_and_collect(question: str) -> dict:
 
     result = rag_pipeline.search(query=question, top_k=5)
 
-    # RAGAS 형식으로 변환
-    contexts = [src["relevance_text"] for src in result.get("sources", [])]
+    # RAGAS 형식으로 변환 (full_content + 메타데이터 헤더 포함)
+    contexts = []
+    for src in result.get("sources", []):
+        header = (
+            f"출원번호: {src.get('application_number', '')} | "
+            f"발명명칭: {src.get('invention_title', '')} | "
+            f"출원인: {src.get('applicant_name', '')}"
+        )
+        contexts.append(f"{header}\n{src.get('full_content', '')}")
 
     return {
         "question": question,
