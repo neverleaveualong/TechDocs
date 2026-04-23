@@ -1,15 +1,14 @@
-from langchain.chains import RetrievalQA
 from langchain_core.documents import Document
 
-from app.core.llm import get_llm
-from app.core.vectorstore import get_vectorstore
 from app.core.hybrid_search import HybridSearch
-from app.core.reranker import rerank
+from app.core.llm import get_llm
 from app.core.prompts import SEARCH_PROMPT
+from app.core.reranker import rerank
+from app.core.vectorstore import get_vectorstore
 
 
 class RAGPipeline:
-    """RAG 파이프라인 — 벡터 검색 + Hybrid Search + Reranker + LLM 답변 생성"""
+    """RAG pipeline with optional hybrid search and streaming answer support."""
 
     def __init__(self):
         self.llm = get_llm()
@@ -22,57 +21,56 @@ class RAGPipeline:
         use_hybrid: bool = True,
         use_reranker: bool = False,
     ) -> dict:
-        """RAG 검색: 질문 → 검색 → (선택) Rerank → LLM 답변 생성
+        prepared = self.prepare_search(
+            query=query,
+            top_k=top_k,
+            namespace=namespace,
+            use_hybrid=use_hybrid,
+            use_reranker=use_reranker,
+        )
+        answer = self.llm.invoke(prepared["prompt_value"])
 
-        Args:
-            query: 사용자 질문
-            top_k: 최종 반환할 문서 수
-            namespace: Pinecone namespace
-            use_hybrid: True면 BM25+Vector Hybrid Search 사용
-            use_reranker: True면 Reranker로 2차 정렬
-        """
+        return {
+            "answer": answer.content if hasattr(answer, "content") else str(answer),
+            "sources": prepared["sources"],
+            "query": query,
+        }
+
+    def prepare_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        namespace: str = None,
+        use_hybrid: bool = True,
+        use_reranker: bool = False,
+    ) -> dict:
+        """Retrieve supporting documents once so sync and streaming flows can share them."""
         if use_hybrid:
             source_documents = self._hybrid_search(
-                query, top_k=top_k, namespace=namespace, use_reranker=use_reranker,
+                query,
+                top_k=top_k,
+                namespace=namespace,
+                use_reranker=use_reranker,
             )
         else:
             source_documents = self._vector_search(query, top_k=top_k, namespace=namespace)
 
-        # LLM으로 답변 생성
         context_text = self._build_context(source_documents)
         prompt_value = SEARCH_PROMPT.invoke({"context": context_text, "question": query})
-        answer = self.llm.invoke(prompt_value)
-
-        # 출처 정리
-        seen = set()
-        sources = []
-        for doc in source_documents:
-            app_num = doc.metadata.get("application_number", "")
-            if app_num in seen:
-                continue
-            seen.add(app_num)
-            sources.append({
-                "invention_title": doc.metadata.get("invention_title", ""),
-                "applicant_name": doc.metadata.get("applicant_name", ""),
-                "application_number": app_num,
-                "application_date": doc.metadata.get("application_date", ""),
-                "register_status": doc.metadata.get("register_status", ""),
-                "relevance_text": doc.page_content[:200],
-                "full_content": doc.page_content,
-            })
 
         return {
-            "answer": answer.content if hasattr(answer, "content") else str(answer),
-            "sources": sources,
+            "prompt_value": prompt_value,
+            "sources": self._build_sources(source_documents),
             "query": query,
         }
 
-    def _build_context(self, docs: list[Document]) -> str:
-        """문서에 메타데이터 헤더를 붙여 LLM에 전달할 context 생성
+    async def stream_answer(self, prompt_value):
+        """Yield answer chunks from the chat model for fetch streaming."""
+        async for chunk in self.llm.astream(prompt_value):
+            yield chunk
 
-        프롬프트가 출원번호/발명명칭/출원인을 요구하므로,
-        각 chunk 앞에 metadata를 명시적으로 포함시켜 할루시네이션 방지.
-        """
+    def _build_context(self, docs: list[Document]) -> str:
+        """Attach patent metadata headers before passing chunks to the LLM."""
         blocks = []
         for doc in docs:
             meta = doc.metadata
@@ -87,8 +85,29 @@ class RAGPipeline:
             blocks.append(f"{header}\n\n[문서 내용]\n{doc.page_content}")
         return "\n\n---\n\n".join(blocks)
 
+    def _build_sources(self, source_documents: list[Document]) -> list[dict]:
+        seen = set()
+        sources = []
+        for doc in source_documents:
+            app_num = doc.metadata.get("application_number", "")
+            if app_num in seen:
+                continue
+            seen.add(app_num)
+            sources.append(
+                {
+                    "invention_title": doc.metadata.get("invention_title", ""),
+                    "applicant_name": doc.metadata.get("applicant_name", ""),
+                    "application_number": app_num,
+                    "application_date": doc.metadata.get("application_date", ""),
+                    "register_status": doc.metadata.get("register_status", ""),
+                    "relevance_text": doc.page_content[:200],
+                    "full_content": doc.page_content,
+                }
+            )
+        return sources
+
     def _vector_search(self, query: str, top_k: int = 5, namespace: str = None) -> list[Document]:
-        """기존 Vector-only 검색 (RetrievalQA 호환)"""
+        """Vector-only retrieval."""
         vectorstore = get_vectorstore(namespace=namespace)
         retriever = vectorstore.as_retriever(
             search_kwargs={"k": top_k, "namespace": namespace}
@@ -102,17 +121,15 @@ class RAGPipeline:
         namespace: str = None,
         use_reranker: bool = False,
     ) -> list[Document]:
-        """Hybrid Search (BM25 + Vector + RRF) + (선택) Reranker"""
+        """Hybrid search with optional reranking."""
         hs = HybridSearch(namespace=namespace)
 
-        # Reranker를 쓰면 더 많은 후보를 가져와서 재정렬
         fetch_k = top_k * 4 if use_reranker else top_k
         results = hs.search(query, top_k=fetch_k)
 
         if use_reranker:
             results = rerank(query, results, top_k=top_k)
 
-        # dict → Document 변환
         docs = []
         for item in results[:top_k]:
             doc = Document(
@@ -123,7 +140,7 @@ class RAGPipeline:
         return docs
 
     def similarity_search(self, query: str, top_k: int = 5, namespace: str = None) -> list[dict]:
-        """유사 문서만 검색 (LLM 답변 없이)"""
+        """Search similar documents without generation."""
         vectorstore = get_vectorstore(namespace=namespace)
         results = vectorstore.similarity_search_with_score(query, k=top_k)
 
