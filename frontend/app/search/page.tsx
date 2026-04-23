@@ -1,20 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import SearchBar from "@/components/search/SearchBar";
-import AiAnswer from "@/components/search/AiAnswer";
-import SearchResults from "@/components/search/SearchResults";
+
 import LoadingSpinner from "@/components/common/LoadingSpinner";
-import { searchPatents } from "@/lib/api";
+import AiAnswer from "@/components/search/AiAnswer";
+import SearchBar from "@/components/search/SearchBar";
+import SearchResults from "@/components/search/SearchResults";
+import { searchPatentsStream } from "@/lib/api";
 import type { SearchResponse } from "@/types/search";
 
 const quickQueries = [
   { label: "2차전지 열 관리", icon: "ri-battery-charge-line" },
-  { label: "반도체 식각 공정", icon: "ri-cpu-line" },
+  { label: "반도체 냉각 공정", icon: "ri-cpu-line" },
   { label: "ERP 클라우드", icon: "ri-cloud-line" },
   { label: "자율주행 센서", icon: "ri-car-line" },
-  { label: "디스플레이 패널", icon: "ri-tv-line" },
+  { label: "디스플레이 조명", icon: "ri-tv-line" },
 ];
+
+function createEmptyResult(query: string): SearchResponse {
+  return {
+    answer: "",
+    sources: [],
+    query,
+  };
+}
 
 export default function SearchPage() {
   const [result, setResult] = useState<SearchResponse | null>(null);
@@ -24,12 +33,39 @@ export default function SearchPage() {
   const handleSearch = async (query: string) => {
     setIsLoading(true);
     setError(null);
-    setResult(null);
+    setResult(createEmptyResult(query));
+
     try {
-      const data = await searchPatents(query);
-      setResult(data);
+      await searchPatentsStream(query, (event) => {
+        setResult((prev) => {
+          const current = prev ?? createEmptyResult(query);
+
+          switch (event.type) {
+            case "sources":
+              return {
+                ...current,
+                query: event.query,
+                sources: event.sources,
+              };
+            case "answer_delta":
+              return {
+                ...current,
+                answer: current.answer + event.delta,
+              };
+            case "done":
+              return {
+                ...current,
+                query: event.query,
+                query_log_id: event.query_log_id,
+              };
+            default:
+              return current;
+          }
+        });
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "검색 중 오류가 발생했습니다.");
+      setResult(null);
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +73,6 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 페이지 헤더 */}
       <header className="bg-white border-b border-gray-200">
         <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
           <div className="flex justify-between items-center">
@@ -49,7 +84,7 @@ export default function SearchPage() {
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">AI 검색</h1>
               </div>
               <p className="text-sm text-gray-500 hidden sm:block pl-11">
-                자연어로 질문하면 RAG 파이프라인이 관련 특허를 분석합니다
+                자연어로 질문하면 RAG 파이프라인이 관련 특허를 분석합니다.
               </p>
             </div>
             <div className="hidden md:flex items-center gap-2 text-xs text-gray-400">
@@ -68,11 +103,9 @@ export default function SearchPage() {
       </header>
 
       <main className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
-        {/* 검색 영역 */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
           <SearchBar onSearch={handleSearch} isLoading={isLoading} />
 
-          {/* 추천 검색어 */}
           {!result && !isLoading && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
               <span className="text-[11px] text-gray-400 font-medium leading-7">추천 검색어</span>
@@ -90,9 +123,8 @@ export default function SearchPage() {
           )}
         </div>
 
-        {/* 결과 영역 */}
         <div className="mt-6">
-          {isLoading && <LoadingSpinner message="특허를 검색하고 AI가 분석 중입니다..." />}
+          {isLoading && !result?.answer && <LoadingSpinner message="관련 특허를 검색하고 AI 답변을 생성 중입니다..." />}
 
           {error && (
             <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -106,7 +138,12 @@ export default function SearchPage() {
 
           {result && (
             <div className="space-y-4 animate-fade-in">
-              <AiAnswer answer={result.answer} query={result.query} queryLogId={result.query_log_id} />
+              <AiAnswer
+                answer={result.answer}
+                query={result.query}
+                queryLogId={result.query_log_id}
+                isStreaming={isLoading}
+              />
               <SearchResults sources={result.sources} />
               <div className="flex justify-center">
                 <button
@@ -114,14 +151,13 @@ export default function SearchPage() {
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-gray-500 bg-white border border-gray-200 rounded-lg hover:text-teal-600 hover:border-teal-200 transition-all"
                 >
                   <i className="ri-refresh-line" />
-                  새 검색
+                  다시 검색
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* 빈 상태 */}
         {!result && !isLoading && !error && (
           <div className="mt-6 bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
@@ -131,7 +167,7 @@ export default function SearchPage() {
                 </div>
                 <h4 className="text-sm font-bold text-gray-900 mb-1">벡터 유사도 검색</h4>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  Pinecone에서 코사인 유사도 기반으로 관련 특허 청크를 검색합니다
+                  Pinecone에서 코사인 유사도 기반으로 관련 특허 청크를 검색합니다.
                 </p>
               </div>
               <div className="p-8 text-center">
@@ -140,23 +176,23 @@ export default function SearchPage() {
                 </div>
                 <h4 className="text-sm font-bold text-gray-900 mb-1">AI 답변 생성</h4>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  GPT-4o-mini가 검색된 특허를 분석하고 종합적인 답변을 생성합니다
+                  GPT-4o-mini가 검색된 특허를 바탕으로 답변을 생성합니다.
                 </p>
               </div>
               <div className="p-8 text-center">
                 <div className="w-12 h-12 flex items-center justify-center mx-auto mb-4 bg-teal-50 rounded-xl">
                   <i className="ri-file-text-line text-xl text-teal-500" />
                 </div>
-                <h4 className="text-sm font-bold text-gray-900 mb-1">출처 특허 제공</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-1">관련 특허 제공</h4>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  답변의 근거가 된 특허 원문과 출원 정보를 함께 제공합니다
+                  답변 근거가 되는 관련 특허와 출원 정보를 함께 제공합니다.
                 </p>
               </div>
             </div>
             <div className="border-t border-gray-100 bg-gray-50/50 px-8 py-4 text-center">
               <p className="text-[11px] text-gray-400">
                 <i className="ri-time-line mr-1" />
-                RAG 파이프라인 처리에 약 10~30초가 소요됩니다
+                검색 결과와 답변은 fetch streaming으로 순차 표시됩니다.
               </p>
             </div>
           </div>
