@@ -55,7 +55,7 @@ class RAGPipeline:
         else:
             source_documents = self._vector_search(query, top_k=top_k, namespace=namespace)
 
-        context_text = "\n\n".join(doc.page_content for doc in source_documents)
+        context_text = self._build_context(source_documents)
         prompt_value = SEARCH_PROMPT.invoke({"context": context_text, "question": query})
 
         return {
@@ -68,6 +68,22 @@ class RAGPipeline:
         """Yield answer chunks from the chat model for fetch streaming."""
         async for chunk in self.llm.astream(prompt_value):
             yield chunk
+
+    def _build_context(self, docs: list[Document]) -> str:
+        """Attach patent metadata headers before passing chunks to the LLM."""
+        blocks = []
+        for doc in docs:
+            meta = doc.metadata
+            header = (
+                f"[특허 정보]\n"
+                f"- 출원번호: {meta.get('application_number', '정보 없음')}\n"
+                f"- 발명의 명칭: {meta.get('invention_title', '정보 없음')}\n"
+                f"- 출원인: {meta.get('applicant_name', '정보 없음')}\n"
+                f"- 출원일: {meta.get('application_date', '정보 없음')}\n"
+                f"- 등록상태: {meta.get('register_status', '정보 없음')}"
+            )
+            blocks.append(f"{header}\n\n[문서 내용]\n{doc.page_content}")
+        return "\n\n---\n\n".join(blocks)
 
     def _build_sources(self, source_documents: list[Document]) -> list[dict]:
         seen = set()
