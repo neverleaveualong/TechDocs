@@ -19,6 +19,8 @@ def patent_to_document(patent: PatentItem) -> Document:
     """
     content_parts = []
 
+    if patent.application_number:
+        content_parts.append(f"출원번호: {patent.application_number}")
     if patent.invention_title:
         content_parts.append(f"발명의 명칭: {patent.invention_title}")
     if patent.applicant_name:
