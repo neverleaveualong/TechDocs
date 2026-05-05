@@ -79,6 +79,7 @@ class RAGPipeline:
                 f"- 출원번호: {meta.get('application_number', '정보 없음')}\n"
                 f"- 발명의 명칭: {meta.get('invention_title', '정보 없음')}\n"
                 f"- 출원인: {meta.get('applicant_name', '정보 없음')}\n"
+                f"- IPC 분류: {meta.get('ipc_number', '정보 없음')}\n"
                 f"- 출원일: {meta.get('application_date', '정보 없음')}\n"
                 f"- 등록상태: {meta.get('register_status', '정보 없음')}"
             )
