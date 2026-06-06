@@ -28,11 +28,8 @@ jobs:
         run: python -m py_compile app/main.py && python -m py_compile app/config.py && echo "Syntax OK"
 
       - name: Module structure check
-        run: python -c "
-          import importlib.util;
-          modules = ['app.models.patent', 'app.models.search', 'app.models.ingest'];
-          [print(f'{m} OK') for m in modules if importlib.util.find_spec(m)]
-          "
+        run: >-
+          python -c "import importlib.util, sys; modules = ['app.models.patent', 'app.models.search', 'app.models.ingest']; missing = [m for m in modules if importlib.util.find_spec(m) is None]; [print(f'{m} OK') for m in modules if m not in missing]; sys.exit('Missing modules: ' + ', '.join(missing) if missing else 0)"
 
   frontend:
     runs-on: ubuntu-latest
