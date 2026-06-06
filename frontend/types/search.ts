@@ -14,6 +14,26 @@ export interface SearchResponse {
   query_log_id?: number;
 }
 
+export type SearchStreamEvent =
+  | {
+      type: "sources";
+      query: string;
+      sources: PatentSource[];
+    }
+  | {
+      type: "answer_delta";
+      delta: string;
+    }
+  | {
+      type: "done";
+      query: string;
+      query_log_id?: number;
+    }
+  | {
+      type: "error";
+      detail: string;
+    };
+
 export interface FeedbackCreate {
   query_log_id: number;
   rating: number;

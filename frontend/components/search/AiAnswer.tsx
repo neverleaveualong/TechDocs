@@ -8,9 +8,10 @@ interface AiAnswerProps {
   answer: string;
   query: string;
   queryLogId?: number;
+  isStreaming?: boolean;
 }
 
-export default function AiAnswer({ answer, query, queryLogId }: AiAnswerProps) {
+export default function AiAnswer({ answer, query, queryLogId, isStreaming = false }: AiAnswerProps) {
   const [voted, setVoted] = useState<"up" | "down" | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,6 +36,12 @@ export default function AiAnswer({ answer, query, queryLogId }: AiAnswerProps) {
             <i className="ri-robot-line text-white text-xs" />
           </div>
           <span className="text-sm font-bold text-gray-900">AI Analysis</span>
+          {isStreaming && (
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-teal-50 text-teal-600 rounded font-medium border border-teal-100">
+              <i className="ri-loader-4-line animate-spin" />
+              Streaming
+            </span>
+          )}
         </div>
         <div className="hidden sm:flex items-center gap-2">
           <span className="text-[10px] px-2 py-0.5 bg-teal-50 text-teal-600 rounded font-medium border border-teal-100">RAG</span>
@@ -47,7 +54,7 @@ export default function AiAnswer({ answer, query, queryLogId }: AiAnswerProps) {
           &ldquo;{query}&rdquo;
         </p>
         <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-li:marker:text-teal-500 leading-[1.9]">
-          <ReactMarkdown>{answer}</ReactMarkdown>
+          <ReactMarkdown>{answer || "답변을 생성하고 있습니다..."}</ReactMarkdown>
         </div>
       </div>
 
