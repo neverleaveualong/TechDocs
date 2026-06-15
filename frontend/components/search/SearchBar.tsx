@@ -5,10 +5,19 @@ import { useState } from "react";
 interface SearchBarProps {
   onSearch: (query: string) => void;
   isLoading: boolean;
+  placeholder?: string;
+  buttonLabel?: string;
+  initialQuery?: string;
 }
 
-export default function SearchBar({ onSearch, isLoading }: SearchBarProps) {
-  const [query, setQuery] = useState("");
+export default function SearchBar({
+  onSearch,
+  isLoading,
+  placeholder = "자연어로 특허를 검색하세요  (예: 2차전지 열 관리 기술)",
+  buttonLabel = "검색",
+  initialQuery = "",
+}: SearchBarProps) {
+  const [query, setQuery] = useState(initialQuery);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +33,7 @@ export default function SearchBar({ onSearch, isLoading }: SearchBarProps) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="자연어로 특허를 검색하세요  (예: 2차전지 열 관리 기술)"
+          placeholder={placeholder}
           disabled={isLoading}
           className="w-full pl-12 pr-28 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none transition-all focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
         />
@@ -41,7 +50,7 @@ export default function SearchBar({ onSearch, isLoading }: SearchBarProps) {
           ) : (
             <>
               <i className="ri-search-line" />
-              검색
+              {buttonLabel}
             </>
           )}
         </button>

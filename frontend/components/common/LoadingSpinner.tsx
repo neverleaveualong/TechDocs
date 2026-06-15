@@ -12,21 +12,13 @@ const tips = [
 
 export default function LoadingSpinner({ message = "로딩 중..." }: { message?: string }) {
   const [elapsed, setElapsed] = useState(0);
-  const [tipIdx, setTipIdx] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // 팁 순환: 0→15초→30초→60초→90초
-  useEffect(() => {
-    if (elapsed >= 90) setTipIdx(4);
-    else if (elapsed >= 60) setTipIdx(3);
-    else if (elapsed >= 30) setTipIdx(2);
-    else if (elapsed >= 15) setTipIdx(1);
-    else setTipIdx(0);
-  }, [elapsed]);
+  const tipIdx = elapsed >= 90 ? 4 : elapsed >= 60 ? 3 : elapsed >= 30 ? 2 : elapsed >= 15 ? 1 : 0;
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);

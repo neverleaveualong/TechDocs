@@ -1,4 +1,5 @@
 import type { SearchResponse, SearchStreamEvent, SimilarityResponse } from "@/types/search";
+import type { ClaimLensEvent } from "@/types/claimlens";
 import type { Stats } from "@/types/stats";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://techdocs-1v4q.onrender.com";
@@ -73,6 +74,65 @@ export async function searchPatentsStream(
       throw new Error(event.detail);
     }
     onEvent(event);
+  }
+}
+
+export async function streamClaimLensAnalysis(
+  productDescription: string,
+  onEvent: (event: ClaimLensEvent) => void,
+  options?: { topK?: number; signal?: AbortSignal }
+) {
+  const res = await fetch(`${API_URL}/api/claimlens/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({
+      product_description: productDescription,
+      top_k: options?.topK ?? 5,
+    }),
+    signal: options?.signal,
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "침해 검토 요청 실패" }));
+    throw new Error(error.detail || `HTTP ${res.status}`);
+  }
+  if (!res.body) {
+    throw new Error("침해 검토 스트림 응답이 비어 있습니다.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+
+    for (const chunk of chunks) {
+      const event = parseClaimLensSse(chunk);
+      if (event) onEvent(event);
+    }
+  }
+
+  buffer += decoder.decode();
+  const finalEvent = parseClaimLensSse(buffer);
+  if (finalEvent) onEvent(finalEvent);
+}
+
+function parseClaimLensSse(chunk: string): ClaimLensEvent | null {
+  const dataLine = chunk.split("\n").find((line) => line.startsWith("data:"));
+  if (!dataLine) return null;
+  try {
+    return JSON.parse(dataLine.slice("data:".length).trim()) as ClaimLensEvent;
+  } catch {
+    return null;
   }
 }
 
