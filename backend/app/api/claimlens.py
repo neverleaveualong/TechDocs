@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core.claimlens.vector_search import search_claim_candidates
 from app.core.claimlens.workflow import run_claimlens_v1_workflow
-from app.db.claimlens_session import ClaimLensSessionLocal
+from app.db.database import SessionLocal
 from app.models.claimlens_api import ClaimLensAgentEvent, ClaimLensAnalysisRequest
 
 router = APIRouter()
@@ -39,7 +39,8 @@ async def _stream_analysis(request: ClaimLensAnalysisRequest) -> AsyncIterator[s
         yield _encode_sse(ClaimLensAgentEvent(type="step_started", step=step, message=message))
 
     try:
-        with ClaimLensSessionLocal() as db:
+        with SessionLocal() as db:
+
             state = run_claimlens_v1_workflow(
                 request.product_description,
                 technical_domain=request.technical_domain,

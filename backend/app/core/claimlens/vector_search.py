@@ -68,12 +68,46 @@ class ClaimSearchCandidate:
     claim_elements: list[ClaimElementSearchRecord]
 
 
+@dataclass(frozen=True)
+class ClaimVectorDocument:
+    id: str
+    text: str
+    metadata: dict[str, str | int | float | bool]
+
+
 class ClaimLensVectorIndex:
     def __init__(self) -> None:
-        self.index_name = settings.claimlens_pinecone_index_name
-        self.namespace = settings.claimlens_pinecone_namespace
+        self.index_name = settings.pinecone_index_name
+        self.namespace = settings.agent_namespace
         self._pinecone = Pinecone(api_key=settings.pinecone_api_key)
         self._index = self._pinecone.Index(self.index_name)
+
+    def upsert_documents(
+        self,
+        documents: Sequence[ClaimVectorDocument],
+        batch_size: int = 50,
+    ) -> int:
+        saved = 0
+        embeddings_model = get_embeddings()
+        for start in range(0, len(documents), batch_size):
+            batch = documents[start : start + batch_size]
+            embeddings = embeddings_model.embed_documents([doc.text for doc in batch])
+            vectors = [
+                {
+                    "id": doc.id,
+                    "values": embedding,
+                    "metadata": {
+                        **doc.metadata,
+                        "text": doc.text,
+                    },
+                }
+                for doc, embedding in zip(batch, embeddings, strict=True)
+            ]
+            self._index.upsert(vectors=vectors, namespace=self.namespace)
+            saved += len(vectors)
+        return saved
+
+
 
     def search(self, query: str, top_k: int = 10) -> list[VectorSearchResult]:
         embedding = get_embeddings().embed_query(query)

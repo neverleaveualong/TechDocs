@@ -6,7 +6,8 @@ from fastapi.responses import StreamingResponse
 
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
-from app.db.database import get_connection
+from app.db.database import SessionLocal
+from app.models.feedback import QueryLog
 from app.models.search import (
     SearchRequest,
     SearchResponse,
@@ -25,24 +26,20 @@ def _save_query_log(
     elapsed_ms: int,
 ) -> int | None:
     try:
-        conn = get_connection()
-        sources_json = json.dumps(sources, ensure_ascii=False)
-        cursor = conn.execute(
-            "INSERT INTO query_logs (query, answer, sources, search_mode, response_time_ms) VALUES (?, ?, ?, ?, ?)",
-            (
-                query,
-                answer,
-                sources_json,
-                "hybrid" if use_hybrid else "vector",
-                elapsed_ms,
-            ),
-        )
-        conn.commit()
-        query_log_id = cursor.lastrowid
-        conn.close()
-        return query_log_id
+        with SessionLocal() as db:
+            log_entry = QueryLog(
+                query=query,
+                answer=answer,
+                sources=sources,
+                search_mode="hybrid" if use_hybrid else "vector",
+                response_time_ms=elapsed_ms,
+            )
+            db.add(log_entry)
+            db.commit()
+            return log_entry.id
     except Exception:
         return None
+
 
 
 def _encode_stream_event(payload: dict) -> bytes:

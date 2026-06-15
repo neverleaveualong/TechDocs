@@ -3,10 +3,11 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.claimlens_session import ClaimLensBase
+from app.db.database import Base
 
 
-class ClaimLensPatent(ClaimLensBase):
+class ClaimLensPatent(Base):
+
     __tablename__ = "patents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -20,7 +21,7 @@ class ClaimLensPatent(ClaimLensBase):
     claims: Mapped[list["ClaimLensClaim"]] = relationship(back_populates="patent")
 
 
-class ClaimLensClaim(ClaimLensBase):
+class ClaimLensClaim(Base):
     __tablename__ = "claims"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -37,7 +38,8 @@ class ClaimLensClaim(ClaimLensBase):
     elements: Mapped[list["ClaimLensClaimElement"]] = relationship(back_populates="claim")
 
 
-class ClaimLensClaimElement(ClaimLensBase):
+class ClaimLensClaimElement(Base):
+
     __tablename__ = "claim_elements"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
