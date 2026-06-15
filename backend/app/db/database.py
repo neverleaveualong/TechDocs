@@ -1,47 +1,34 @@
-"""SQLite feedback DB - user ratings and query logging"""
+from collections.abc import Generator
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-import sqlite3
-from pathlib import Path
-from datetime import datetime
+from app.config import settings
 
-DB_PATH = Path(__file__).parent.parent.parent / "data" / "feedback.db"
+# 단일 Base 클래스 선언
+class Base(DeclarativeBase):
+    pass
 
+# PostgreSQL 커넥션 엔진
+engine = create_engine(settings.database_url, pool_pre_ping=True)
 
-def get_connection() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+)
+
+# API 등에서 사용할 DB 세션 의존성 제공자
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def init_db():
-    conn = get_connection()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS query_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            sources TEXT,
-            search_mode TEXT DEFAULT 'hybrid',
-            response_time_ms INTEGER,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS feedbacks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query_log_id INTEGER NOT NULL,
-            rating INTEGER NOT NULL CHECK(rating IN (1, -1)),
-            comment TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (query_log_id) REFERENCES query_logs(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_feedbacks_query_log_id ON feedbacks(query_log_id);
-        CREATE INDEX IF NOT EXISTS idx_query_logs_created_at ON query_logs(created_at);
-    """)
-    conn.commit()
-    conn.close()
-
-
-init_db()
+    # 모델들을 임포트하여 Base.metadata.create_all 이 모든 테이블을 생성할 수 있도록 함
+    from app.models.feedback import QueryLog, Feedback
+    from app.models.claimlens import ClaimLensPatent, ClaimLensClaim, ClaimLensClaimElement
+    
+    Base.metadata.create_all(bind=engine)

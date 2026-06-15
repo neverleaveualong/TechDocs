@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     # Pinecone
     pinecone_api_key: str
     pinecone_index_name: str = "techdocs-patents"
+    
+    # Namespaces
+    rag_namespace: str = "techdocs-rag"
+    agent_namespace: str = "claimlens-agent"
+
+    # PostgreSQL Database URL
+    database_url: str = "postgresql+psycopg://techdocs:techdocs@localhost:5432/techdocs"
 
     # KIPRIS
     kipris_api_key: str
