@@ -107,6 +107,12 @@ class ClaimLensVectorIndex:
             saved += len(vectors)
         return saved
 
+    def delete_patent_documents(self, patent_id: int) -> None:
+        self._index.delete(
+            namespace=self.namespace,
+            filter={"patent_id": {"$eq": patent_id}},
+        )
+
 
 
     def search(self, query: str, top_k: int = 10) -> list[VectorSearchResult]:
