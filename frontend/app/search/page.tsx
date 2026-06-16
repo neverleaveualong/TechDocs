@@ -88,33 +88,39 @@ export default function SearchPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
         <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
+              <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm">
                   <i className={mode === "rag" ? "ri-robot-line text-white text-sm" : "ri-scales-3-line text-white text-sm"} />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  AI 검색
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                  AI 특허 검색
                 </h1>
               </div>
-              <p className="text-sm text-gray-500 hidden sm:block pl-11">
-                {mode === "rag"
-                  ? "자연어로 질문하면 RAG 파이프라인이 관련 특허를 분석합니다"
-                  : "제품 설명과 특허 청구항을 비교해 claim chart 초안을 생성합니다"}
-              </p>
+              
+              {/* 모드 전환 탭 - 좌상단 배치 및 시인성 개선 */}
+              <div className="flex items-center gap-1.5 p-0.5 bg-gray-100 border border-gray-200 rounded-lg">
+                <ModeButton active={mode === "rag"} onClick={() => switchMode("rag")}>
+                  <i className="ri-robot-line mr-1 text-[11px]" />
+                  RAG 검색
+                </ModeButton>
+                <ModeButton active={mode === "claimlens"} onClick={() => switchMode("claimlens")}>
+                  <i className="ri-scales-3-line mr-1 text-[11px]" />
+                  침해 검토 (Agent)
+                </ModeButton>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ModeButton active={mode === "rag"} onClick={() => switchMode("rag")}>
-                RAG 검색
-              </ModeButton>
-              <ModeButton active={mode === "claimlens"} onClick={() => switchMode("claimlens")}>
-                침해 검토
-              </ModeButton>
-            </div>
+
+            <p className="text-xs text-gray-400 font-medium sm:text-right">
+              {mode === "rag"
+                ? "자연어로 질문하여 관련 특허 및 요약 분석"
+                : "제품 기능 명세를 기반으로 한 청구항 침해 대조 분석"}
+            </p>
           </div>
         </div>
       </header>
+
 
       <main className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
@@ -210,16 +216,17 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-all ${
+      className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all duration-150 flex items-center gap-1 ${
         active
-          ? "bg-teal-50 text-teal-700 border-teal-200"
-          : "bg-gray-50 text-gray-500 border-gray-100 hover:bg-teal-50 hover:text-teal-700"
+          ? "bg-white text-teal-800 shadow-sm border border-gray-200"
+          : "text-gray-500 hover:text-gray-900"
       }`}
     >
       {children}
     </button>
   );
 }
+
 
 function ClaimLensResult({
   query,

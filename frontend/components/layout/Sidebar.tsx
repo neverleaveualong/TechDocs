@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 
 const mainMenu = [
   { href: "/", icon: "ri-home-line", activeIcon: "ri-home-fill", label: "홈", exact: true },
-  { href: "/search", icon: "ri-robot-line", activeIcon: "ri-robot-fill", label: "AI 검색" },
-  { href: "/upload", icon: "ri-database-2-line", activeIcon: "ri-database-2-fill", label: "데이터 수집" },
+  { href: "/search", icon: "ri-robot-line", activeIcon: "ri-robot-fill", label: "AI 특허 검색" },
   { href: "/dashboard", icon: "ri-bar-chart-line", activeIcon: "ri-bar-chart-fill", label: "대시보드" },
 ];
+
 
 const bottomMenu = [
   { href: "/help", icon: "ri-question-line", activeIcon: "ri-question-fill", label: "도움말" },
