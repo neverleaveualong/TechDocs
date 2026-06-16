@@ -5,18 +5,18 @@ import { useSearchDemo, demoScenarios } from "@/hooks/useSearchDemo";
 
 const featureCards = [
   {
-    title: "AI 특허 검색",
-    desc: "자연어 질문 → 벡터 유사도 검색 → LLM이 관련 특허를 분석하고 답변을 생성합니다.",
+    title: "특허 검색 (RAG Search)",
+    desc: "자연어 질문을 기반으로 관련 특허를 검색하고, RAG 파이프라인으로 근거와 요약 답변을 제공합니다.",
     icon: "ri-robot-line",
     href: "/search",
     tag: "RAG + LLM",
   },
   {
-    title: "데이터 수집",
-    desc: "KIPRIS 공공 API에서 기업별 특허를 수집하고, 임베딩 후 Pinecone에 저장합니다.",
-    icon: "ri-database-2-line",
-    href: "/upload",
-    tag: "KIPRIS API",
+    title: "특허 침해 검색 (AI Agent)",
+    desc: "제품 기능 설명과 특허 청구항을 비교해 구성요소 매칭과 claim chart 초안을 생성합니다.",
+    icon: "ri-scales-3-line",
+    href: "/search",
+    tag: "AI Agent",
   },
   {
     title: "대시보드",
@@ -62,12 +62,12 @@ export default function HomePage() {
               </div>
 
               <h2 className="text-white text-lg sm:text-xl font-bold leading-snug mb-3">
-                AI가 특허를 읽고,<br />
-                <span className="text-teal">핵심만 요약</span>해드립니다.
+                특허 검색부터 침해 검토까지,<br />
+                <span className="text-teal">AI Agent</span>로 이어갑니다.
               </h2>
               <p className="text-brand-200/80 text-sm leading-relaxed mb-6 max-w-md">
-                KIPRIS 특허 데이터를 벡터 DB에 저장하고,
-                자연어 질문만으로 관련 특허를 검색 · 분석합니다.
+                자연어 기반 특허 검색(RAG Search)과 제품 기능 기반 특허 침해 검색(AI Agent)을
+                한 화면에서 선택해 분석합니다.
               </p>
 
               <div className="flex flex-wrap gap-3 mb-6">
@@ -75,15 +75,15 @@ export default function HomePage() {
                   href="/search"
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-teal text-brand-900 text-sm font-semibold rounded-lg hover:bg-teal-200 transition-colors shadow-md"
                 >
-                  <i className="ri-robot-line" />
-                  AI 검색 시작
+                  <i className="ri-search-line" />
+                  특허 검색 시작
                 </Link>
                 <Link
-                  href="/upload"
+                  href="/search"
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 text-white text-sm font-medium rounded-lg border border-white/15 hover:bg-white/20 transition-colors"
                 >
-                  <i className="ri-database-2-line" />
-                  데이터 수집
+                  <i className="ri-scales-3-line" />
+                  침해 검색 시작
                 </Link>
               </div>
 

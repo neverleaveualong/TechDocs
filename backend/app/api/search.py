@@ -4,6 +4,7 @@ import time
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from app.config import settings
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
 from app.db.database import SessionLocal
@@ -54,6 +55,7 @@ async def search(request: Request, body: SearchRequest):
         result = rag_pipeline.search(
             query=body.query,
             top_k=body.top_k,
+            namespace=settings.rag_namespace,
             use_hybrid=body.use_hybrid,
             use_reranker=body.use_reranker,
         )
@@ -81,6 +83,7 @@ async def search_stream(request: Request, body: SearchRequest):
             prepared = rag_pipeline.prepare_search(
                 query=body.query,
                 top_k=body.top_k,
+                namespace=settings.rag_namespace,
                 use_hybrid=body.use_hybrid,
                 use_reranker=body.use_reranker,
             )
@@ -142,6 +145,7 @@ async def similarity_search(request: Request, body: SimilarityRequest):
         results = rag_pipeline.similarity_search(
             query=body.query,
             top_k=body.top_k,
+            namespace=settings.rag_namespace,
         )
         return {"results": results}
     except Exception as e:

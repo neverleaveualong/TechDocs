@@ -6,9 +6,9 @@ import SearchBar from "@/components/search/SearchBar";
 import AiAnswer from "@/components/search/AiAnswer";
 import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
-import { searchPatents, streamClaimLensAnalysis } from "@/lib/api";
+import { searchPatents, searchPatentsStream, streamClaimLensAnalysis } from "@/lib/api";
 import type { ClaimLensEvent } from "@/types/claimlens";
-import type { SearchResponse } from "@/types/search";
+import type { PatentSource } from "@/types/search";
 
 type SearchMode = "rag" | "claimlens";
 
@@ -28,54 +28,121 @@ const claimLensQueries = [
 
 export default function SearchPage() {
   const [mode, setMode] = useState<SearchMode>("rag");
-  const [ragResult, setRagResult] = useState<SearchResponse | null>(null);
+  
+  // RAG States
+  const [streamedAnswer, setStreamedAnswer] = useState("");
+  const [streamedSources, setStreamedSources] = useState<PatentSource[]>([]);
+  const [queryLogId, setQueryLogId] = useState<number | undefined>(undefined);
+  
+  // ClaimLens States
   const [claimLensEvents, setClaimLensEvents] = useState<ClaimLensEvent[]>([]);
+  
   const [activeQuery, setActiveQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const searchRunRef = useRef(0);
 
   const handleSearch = async (query: string) => {
+    abortRef.current?.abort();
+    const runId = searchRunRef.current + 1;
+    searchRunRef.current = runId;
+    const isCurrentRun = () => searchRunRef.current === runId;
+
     setActiveQuery(query);
     setIsLoading(true);
+    setIsStreaming(false);
     setError(null);
-    setRagResult(null);
+    
+    // Reset RAG results
+    setStreamedAnswer("");
+    setStreamedSources([]);
+    setQueryLogId(undefined);
+    
+    // Reset ClaimLens results
     setClaimLensEvents([]);
-    abortRef.current?.abort();
 
     try {
       if (mode === "rag") {
-        const data = await searchPatents(query);
-        setRagResult(data);
+        const controller = new AbortController();
+        abortRef.current = controller;
+        try {
+          await searchPatentsStream(
+            query,
+            (event) => {
+              if (!isCurrentRun()) return;
+              if (event.type === "sources") {
+                setStreamedSources(event.sources);
+                setIsLoading(false); // First meaningful chunk received
+                setIsStreaming(true);
+              } else if (event.type === "answer_delta") {
+                setStreamedAnswer((prev) => prev + event.delta);
+              } else if (event.type === "done") {
+                setQueryLogId(event.query_log_id);
+                setIsStreaming(false);
+              }
+            },
+            5,
+            { signal: controller.signal }
+          );
+        } catch (streamError) {
+          if (!isCurrentRun()) return;
+          if (streamError instanceof DOMException && streamError.name === "AbortError") {
+            throw streamError;
+          }
+
+          setIsLoading(true);
+          setIsStreaming(false);
+          setStreamedAnswer("");
+          setStreamedSources([]);
+
+          const fallbackResult = await searchPatents(query);
+          if (!isCurrentRun()) return;
+          setStreamedAnswer(fallbackResult.answer);
+          setStreamedSources(fallbackResult.sources);
+          setQueryLogId(fallbackResult.query_log_id);
+        }
       } else {
         const controller = new AbortController();
         abortRef.current = controller;
         await streamClaimLensAnalysis(
           query,
-          (event) => setClaimLensEvents((events) => [...events, event]),
+          (event) => {
+            if (!isCurrentRun()) return;
+            setClaimLensEvents((events) => [...events, event]);
+          },
           { topK: 5, signal: controller.signal },
         );
       }
     } catch (err) {
+      if (!isCurrentRun()) return;
       if (err instanceof DOMException && err.name === "AbortError") {
-        setError("침해 검토가 중단되었습니다.");
+        setError(mode === "rag" ? "검색이 중단되었습니다." : "침해 검토가 중단되었습니다.");
       } else {
         setError(err instanceof Error ? err.message : "검색 중 오류가 발생했습니다.");
       }
     } finally {
-      setIsLoading(false);
-      abortRef.current = null;
+      if (isCurrentRun()) {
+        setIsLoading(false);
+        setIsStreaming(false);
+        abortRef.current = null;
+      }
     }
   };
 
   const switchMode = (nextMode: SearchMode) => {
     abortRef.current?.abort();
+    searchRunRef.current += 1;
     setMode(nextMode);
     setError(null);
-    setRagResult(null);
+    setStreamedAnswer("");
+    setStreamedSources([]);
+    setQueryLogId(undefined);
     setClaimLensEvents([]);
     setActiveQuery("");
     setIsLoading(false);
+    setIsStreaming(false);
   };
 
   const quickQueries = mode === "rag" ? ragQueries : claimLensQueries;
@@ -88,48 +155,64 @@ export default function SearchPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
         <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm">
-                  <i className={mode === "rag" ? "ri-robot-line text-white text-sm" : "ri-scales-3-line text-white text-sm"} />
-                </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  AI 검색
-                </h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm">
+                <i className={mode === "rag" ? "ri-robot-line text-white text-sm" : "ri-scales-3-line text-white text-sm"} />
               </div>
-              <p className="text-sm text-gray-500 hidden sm:block pl-11">
-                {mode === "rag"
-                  ? "자연어로 질문하면 RAG 파이프라인이 관련 특허를 분석합니다"
-                  : "제품 설명과 특허 청구항을 비교해 claim chart 초안을 생성합니다"}
-              </p>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                AI 특허 검색
+              </h1>
             </div>
-            <div className="flex items-center gap-2">
-              <ModeButton active={mode === "rag"} onClick={() => switchMode("rag")}>
-                RAG 검색
-              </ModeButton>
-              <ModeButton active={mode === "claimlens"} onClick={() => switchMode("claimlens")}>
-                침해 검토
-              </ModeButton>
-            </div>
+
+            <p className="text-xs text-gray-400 font-medium sm:text-right">
+              {mode === "rag"
+                ? "궁금한 기술을 문장으로 입력하면 관련 특허를 찾아 요약합니다"
+                : "제품 설명을 입력하면 비슷한 특허 청구항을 찾아 비교합니다"}
+            </p>
           </div>
         </div>
       </header>
 
+
       <main className="px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
+          <div className="mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ModeButton
+                active={mode === "rag"}
+                icon="ri-search-line"
+                title="특허 검색 (RAG Search)"
+                subtitle="질문과 가까운 특허를 찾아 핵심을 요약합니다"
+                onClick={() => switchMode("rag")}
+              />
+              <ModeButton
+                active={mode === "claimlens"}
+                icon="ri-scales-3-line"
+                title="특허 침해 검색 (AI Agent)"
+                subtitle="제품 설명과 특허 청구항이 얼마나 겹치는지 비교합니다"
+                onClick={() => switchMode("claimlens")}
+              />
+            </div>
+          </div>
+
           <SearchBar
             onSearch={handleSearch}
-            isLoading={isLoading}
-            buttonLabel={mode === "rag" ? "검색" : "검토"}
+            onCancel={() => abortRef.current?.abort()}
+            isLoading={isLoading || isStreaming}
+            buttonLabel={
+              mode === "rag"
+                ? isLoading || isStreaming ? "중단" : "검색"
+                : isLoading || isStreaming ? "중단" : "검토"
+            }
             placeholder={
               mode === "rag"
-                ? "자연어로 특허를 검색하세요  (예: 2차전지 열 관리 기술)"
-                : "제품/기술 설명을 입력하세요  (예: 검색 이력 기반 문서 추천 서비스)"
+                ? "찾고 싶은 기술을 문장으로 입력하세요  (예: 전기차 배터리 열을 식히는 기술)"
+                : "비교할 제품이나 기능을 쉽게 설명해주세요  (예: 검색 기록을 보고 문서를 추천하는 서비스)"
             }
           />
 
-          {!ragResult && claimLensEvents.length === 0 && !isLoading && (
+          {!streamedAnswer && streamedSources.length === 0 && claimLensEvents.length === 0 && !isLoading && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
               <span className="text-[11px] text-gray-400 font-medium leading-7">
                 {mode === "rag" ? "추천 검색어" : "검토 예시"}
@@ -150,7 +233,7 @@ export default function SearchPage() {
 
         <div className="mt-6">
           {isLoading && mode === "rag" && (
-            <LoadingSpinner message="특허를 검색하고 AI가 분석 중입니다..." />
+            <LoadingSpinner message="특허를 검색하는 중입니다..." />
           )}
 
           {error && (
@@ -163,11 +246,20 @@ export default function SearchPage() {
             </div>
           )}
 
-          {mode === "rag" && ragResult && (
+          {mode === "rag" && (streamedAnswer || streamedSources.length > 0) && (
             <div className="space-y-4 animate-fade-in">
-              <AiAnswer answer={ragResult.answer} query={ragResult.query} queryLogId={ragResult.query_log_id} />
-              <SearchResults sources={ragResult.sources} />
-              <ResetButton onClick={() => setRagResult(null)} />
+              <AiAnswer 
+                answer={streamedAnswer} 
+                query={activeQuery} 
+                queryLogId={queryLogId}
+                isStreaming={isStreaming}
+              />
+              <SearchResults sources={streamedSources} />
+              <ResetButton onClick={() => {
+                setStreamedAnswer("");
+                setStreamedSources([]);
+                setQueryLogId(undefined);
+              }} />
             </div>
           )}
 
@@ -189,7 +281,7 @@ export default function SearchPage() {
           )}
         </div>
 
-        {!ragResult && claimLensEvents.length === 0 && !isLoading && !error && (
+        {!streamedAnswer && streamedSources.length === 0 && claimLensEvents.length === 0 && !isLoading && !error && (
           <EmptyState mode={mode} />
         )}
       </main>
@@ -199,27 +291,45 @@ export default function SearchPage() {
 
 function ModeButton({
   active,
+  icon,
+  title,
+  subtitle,
   onClick,
-  children,
 }: {
   active: boolean;
+  icon: string;
+  title: string;
+  subtitle: string;
   onClick: () => void;
-  children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-all ${
+      className={`group flex items-center gap-3 rounded-xl border p-4 text-left transition-all duration-150 ${
         active
-          ? "bg-teal-50 text-teal-700 border-teal-200"
-          : "bg-gray-50 text-gray-500 border-gray-100 hover:bg-teal-50 hover:text-teal-700"
+          ? "border-teal-300 bg-teal-50 text-teal-900 shadow-sm ring-2 ring-teal-100"
+          : "border-gray-200 bg-gray-50 text-gray-600 hover:border-teal-200 hover:bg-white hover:text-gray-900"
       }`}
     >
-      {children}
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+          active ? "bg-teal-600 text-white" : "bg-white text-gray-400 group-hover:text-teal-600"
+        }`}
+      >
+        <i className={`${icon} text-lg`} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold">{title}</span>
+        <span className={`block text-[11px] font-semibold ${active ? "text-teal-700" : "text-gray-400"}`}>
+          {subtitle}
+        </span>
+      </span>
+      {active && <i className="ri-check-line ml-auto text-lg text-teal-600" />}
     </button>
   );
 }
+
 
 function ClaimLensResult({
   query,
@@ -498,14 +608,14 @@ function EmptyState({ mode }: { mode: SearchMode }) {
   const items =
     mode === "rag"
       ? [
-          ["ri-search-line", "벡터 유사도 검색", "Pinecone에서 코사인 유사도 기반으로 관련 특허 청크를 검색합니다"],
-          ["ri-robot-line", "AI 답변 생성", "GPT-4o-mini가 검색된 특허를 분석하고 종합적인 답변을 생성합니다"],
-          ["ri-file-text-line", "출처 특허 제공", "답변의 근거가 된 특허 원문과 출원 정보를 함께 제공합니다"],
+          ["ri-search-line", "비슷한 특허 찾기", "입력한 질문과 의미가 가까운 특허 문서를 먼저 찾아냅니다"],
+          ["ri-robot-line", "쉬운 말로 요약", "찾은 특허 내용을 바탕으로 핵심만 정리해 답변합니다"],
+          ["ri-file-text-line", "근거 함께 확인", "답변에 사용된 특허 제목과 출원 정보를 같이 보여줍니다"],
         ]
       : [
-          ["ri-search-eye-line", "Claim 후보 검색", "제품 설명을 임베딩해 관련 청구항과 claim element 후보를 찾습니다"],
-          ["ri-node-tree", "구성요소 매칭", "제품 기능과 청구항 구성요소를 matched, partial, not_found, uncertain으로 비교합니다"],
-          ["ri-stream-line", "SSE 진행 표시", "분석 단계와 claim chart row를 실시간 이벤트로 보여줍니다"],
+          ["ri-search-eye-line", "관련 특허 후보 찾기", "제품 설명과 비슷한 내용을 가진 특허 청구항을 찾아냅니다"],
+          ["ri-node-tree", "겹치는 부분 비교", "제품 기능과 특허의 핵심 요소가 어디까지 비슷한지 나눠서 봅니다"],
+          ["ri-file-list-3-line", "검토 초안 만들기", "비교 결과를 표와 설명 형태로 정리해 검토 초안을 보여줍니다"],
         ];
 
   return (
@@ -524,7 +634,7 @@ function EmptyState({ mode }: { mode: SearchMode }) {
       <div className="border-t border-gray-100 bg-gray-50/50 px-8 py-4 text-center">
         <p className="text-[11px] text-gray-400">
           <i className="ri-time-line mr-1" />
-          {mode === "rag" ? "RAG 파이프라인 처리에 약 10~30초가 소요됩니다" : "침해 검토는 ClaimLens 데이터셋과 Pinecone 인덱스가 필요합니다"}
+          {mode === "rag" ? "특허 검색과 요약에는 보통 10~30초가 걸립니다" : "침해 검색은 후보 특허를 찾고 비교표를 만드는 데 보통 10~30초가 걸립니다"}
         </p>
       </div>
     </div>
