@@ -9,7 +9,11 @@ class Base(DeclarativeBase):
     pass
 
 # PostgreSQL 커넥션 엔진
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": 5},
+)
 
 SessionLocal = sessionmaker(
     bind=engine,
