@@ -54,7 +54,9 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
           &ldquo;{query}&rdquo;
         </p>
         <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-li:marker:text-teal-500 leading-[1.9]">
-          <ReactMarkdown>{answer || "답변을 생성하고 있습니다..."}</ReactMarkdown>
+          <div className={isStreaming ? "after:content-['▋'] after:ml-0.5 after:animate-pulse after:text-teal-500" : ""}>
+            <ReactMarkdown>{answer || (isStreaming ? "" : "답변을 생성하고 있습니다...")}</ReactMarkdown>
+          </div>
         </div>
       </div>
 

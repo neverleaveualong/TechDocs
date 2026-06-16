@@ -28,12 +28,14 @@ export async function searchPatents(query: string, topK: number = 5) {
 export async function searchPatentsStream(
   query: string,
   onEvent: (event: SearchStreamEvent) => void,
-  topK: number = 5
+  topK: number = 5,
+  options?: { signal?: AbortSignal }
 ) {
   const res = await fetch(`${API_URL}/api/search/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, top_k: topK }),
+    signal: options?.signal,
   });
 
   if (!res.ok) {
