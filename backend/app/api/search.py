@@ -8,6 +8,7 @@ from app.config import settings
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
 from app.db.database import SessionLocal
+from app.ingestion.auto_ingest import maybe_auto_ingest_for_rag
 from app.models.feedback import QueryLog
 from app.models.search import (
     SearchRequest,
@@ -52,13 +53,30 @@ def _encode_stream_event(payload: dict) -> bytes:
 async def search(request: Request, body: SearchRequest):
     start = time.time()
     try:
-        result = rag_pipeline.search(
+        prepared = rag_pipeline.prepare_search(
             query=body.query,
             top_k=body.top_k,
             namespace=settings.rag_namespace,
             use_hybrid=body.use_hybrid,
             use_reranker=body.use_reranker,
         )
+        if body.auto_ingest and not prepared["sources"]:
+            auto_ingest_result = await maybe_auto_ingest_for_rag(body.query)
+            if auto_ingest_result.should_retry_search:
+                prepared = rag_pipeline.prepare_search(
+                    query=body.query,
+                    top_k=body.top_k,
+                    namespace=settings.rag_namespace,
+                    use_hybrid=body.use_hybrid,
+                    use_reranker=body.use_reranker,
+                )
+
+        answer = rag_pipeline.llm.invoke(prepared["prompt_value"])
+        result = {
+            "answer": answer.content if hasattr(answer, "content") else str(answer),
+            "sources": prepared["sources"],
+            "query": body.query,
+        }
         elapsed_ms = int((time.time() - start) * 1000)
         result["query_log_id"] = _save_query_log(
             query=body.query,
@@ -87,6 +105,35 @@ async def search_stream(request: Request, body: SearchRequest):
                 use_hybrid=body.use_hybrid,
                 use_reranker=body.use_reranker,
             )
+
+            if body.auto_ingest and not prepared["sources"]:
+                yield _encode_stream_event(
+                    {
+                        "type": "auto_ingest_started",
+                        "message": "관련 데이터가 부족해 KIPRIS에서 샘플 특허를 소량 수집합니다.",
+                    }
+                )
+                auto_ingest_result = await maybe_auto_ingest_for_rag(body.query)
+                yield _encode_stream_event(
+                    {
+                        "type": "auto_ingest_completed",
+                        "data": auto_ingest_result.to_event_data(),
+                    }
+                )
+                if auto_ingest_result.should_retry_search:
+                    yield _encode_stream_event(
+                        {
+                            "type": "retry_search",
+                            "message": "수집한 샘플 데이터로 다시 검색합니다.",
+                        }
+                    )
+                    prepared = rag_pipeline.prepare_search(
+                        query=body.query,
+                        top_k=body.top_k,
+                        namespace=settings.rag_namespace,
+                        use_hybrid=body.use_hybrid,
+                        use_reranker=body.use_reranker,
+                    )
 
             yield _encode_stream_event(
                 {

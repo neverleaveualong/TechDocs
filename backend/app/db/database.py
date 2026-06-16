@@ -34,5 +34,6 @@ def init_db():
     # 모델들을 임포트하여 Base.metadata.create_all 이 모든 테이블을 생성할 수 있도록 함
     from app.models.feedback import QueryLog, Feedback
     from app.models.claimlens import ClaimLensPatent, ClaimLensClaim, ClaimLensClaimElement
+    from app.models.auto_ingest import AutoIngestCache
     
     Base.metadata.create_all(bind=engine)

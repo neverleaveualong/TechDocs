@@ -22,6 +22,19 @@ class Settings(BaseSettings):
     kipris_api_key: str
     kipris_base_url: str = "https://plus.kipris.or.kr/kipo-api/kipi"
 
+    # Conservative on-demand ingest limits for portfolio demos.
+    auto_ingest_enabled: bool = True
+    auto_ingest_fallback_applicant: str = "삼성전자"
+    auto_ingest_max_daily_calls: int = 20
+    auto_ingest_max_monthly_calls: int = 300
+    auto_ingest_cache_ttl_days: int = 30
+    auto_ingest_rag_max_patents: int = 3
+    auto_ingest_rag_max_chunks_per_patent: int = 2
+    auto_ingest_claimlens_enabled: bool = True
+    auto_ingest_claimlens_max_patents: int = 1
+    auto_ingest_claimlens_max_claims_per_patent: int = 2
+    auto_ingest_claimlens_max_elements_per_claim: int = 8
+
     # CORS
     frontend_url: str = "http://localhost:3000"
 

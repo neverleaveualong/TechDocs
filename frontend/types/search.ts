@@ -25,6 +25,14 @@ export type SearchStreamEvent =
       delta: string;
     }
   | {
+      type: "auto_ingest_started" | "retry_search";
+      message: string;
+    }
+  | {
+      type: "auto_ingest_completed";
+      data: Record<string, unknown>;
+    }
+  | {
       type: "done";
       query: string;
       query_log_id?: number;
