@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # KIPRIS
     kipris_api_key: str
-    kipris_base_url: str = "http://plus.kipris.or.kr/kipo-api/kipi"
+    kipris_base_url: str = "https://plus.kipris.or.kr/kipo-api/kipi"
 
     # CORS
     frontend_url: str = "http://localhost:3000"

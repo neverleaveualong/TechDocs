@@ -33,7 +33,7 @@ class KiprisClient:
         if end_date:
             params["applicationDateTo"] = end_date
 
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
 
@@ -81,7 +81,7 @@ class KiprisClient:
             "applicationNumber": application_number,
             "accessKey": self.api_key,
         }
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
 
@@ -112,7 +112,7 @@ class KiprisClient:
             "ServiceKey": self.api_key,
             "applicationNumber": application_number,
         }
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
 
