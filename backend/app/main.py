@@ -40,10 +40,18 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
-# CORS
+allowed_origins = sorted(
+    {
+        settings.frontend_url,
+        "http://localhost:3000",
+        "https://techdocs-app.vercel.app",
+    }
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
