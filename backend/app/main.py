@@ -1,3 +1,6 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -9,12 +12,21 @@ from app.api.health import router as health_router
 from app.core.rate_limit import limiter
 from app.db.database import init_db
 
-# Init feedback DB on startup
-init_db()
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        init_db()
+    except Exception as exc:
+        logger.warning("Database initialization skipped: %s", exc)
+    yield
 
 app = FastAPI(
     title="TechDocs API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
