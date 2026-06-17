@@ -120,7 +120,7 @@ async def maybe_auto_ingest_for_rag(
         result = AutoIngestResult(
             status="error",
             mode="rag",
-            message=f"자동 수집 실패: {exc}",
+            message=f"자동 수집 실패: {_format_exception(exc)}",
         )
         _record_result(query, result)
         return result
@@ -187,7 +187,7 @@ async def maybe_auto_ingest_for_claimlens(
         result = AutoIngestResult(
             status="error",
             mode="claimlens",
-            message=f"ClaimLens 자동 수집 실패: {exc}",
+            message=f"ClaimLens 자동 수집 실패: {_format_exception(exc)}",
         )
         _record_result(query, result)
         return result
@@ -576,3 +576,10 @@ def _normalize_query(query: str) -> str:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _format_exception(exc: Exception) -> str:
+    message = str(exc)
+    if message:
+        return f"{type(exc).__name__}: {message}"
+    return f"{type(exc).__name__}: {exc!r}"
