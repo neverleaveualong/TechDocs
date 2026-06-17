@@ -26,6 +26,32 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class RerankEventItem:
+    application_number: str
+    title: str
+    applicant_name: str
+    score: float
+    selected: bool
+
+    def to_event_data(self) -> dict:
+        return {
+            "applicationNumber": self.application_number,
+            "title": self.title,
+            "applicantName": self.applicant_name,
+            "score": round(self.score, 4),
+            "selected": self.selected,
+        }
+
+
+@dataclass
+class PatentSelectionResult:
+    patents: list[PatentItem]
+    calls_used: int
+    rerank_candidates: list[RerankEventItem]
+    min_score: float
+
+
+@dataclass
 class AutoIngestResult:
     status: str
     mode: str
@@ -36,6 +62,8 @@ class AutoIngestResult:
     claimlens_patents_saved: int = 0
     agent_vectors_stored: int = 0
     message: str = ""
+    rerank_candidates: list[RerankEventItem] | None = None
+    rerank_min_score: float | None = None
 
     @property
     def should_retry_search(self) -> bool:
@@ -56,6 +84,11 @@ class AutoIngestResult:
             "claimlensPatentsSaved": self.claimlens_patents_saved,
             "agentVectorsStored": self.agent_vectors_stored,
             "message": self.message,
+            "rerankMinScore": self.rerank_min_score,
+            "rerankCandidates": [
+                candidate.to_event_data()
+                for candidate in self.rerank_candidates or []
+            ],
         }
 
 
@@ -78,17 +111,21 @@ async def maybe_auto_ingest_for_rag(
         return result
 
     try:
-        patents, calls_used = await _search_sample_patents(
+        selection = await _search_sample_patents(
             query,
             max_patents=settings.auto_ingest_rag_max_patents,
             query_plan=query_plan,
             min_rerank_score=settings.auto_ingest_rag_rerank_min_score,
         )
+        patents = selection.patents
+        calls_used = selection.calls_used
         if not patents:
             result = AutoIngestResult(
                 status="low_relevance" if query_plan else "no_data",
                 mode="rag",
                 kipris_calls_used=calls_used,
+                rerank_candidates=selection.rerank_candidates,
+                rerank_min_score=selection.min_score,
                 message=(
                     "KIPRIS 후보는 있었지만 사용자 질의와 충분히 유사한 특허를 찾지 못했습니다."
                     if query_plan
@@ -111,6 +148,8 @@ async def maybe_auto_ingest_for_rag(
             patents_found=len(patents),
             patents_saved=len(patents),
             rag_vectors_stored=vectors_stored,
+            rerank_candidates=selection.rerank_candidates,
+            rerank_min_score=selection.min_score,
             message=f"샘플 특허 {len(patents)}건을 RAG 검색용으로 저장했습니다.",
         )
         _record_result(query, result)
@@ -149,17 +188,21 @@ async def maybe_auto_ingest_for_claimlens(
         return result
 
     try:
-        patents, calls_used = await _search_sample_patents(
+        selection = await _search_sample_patents(
             query,
             max_patents=settings.auto_ingest_claimlens_max_patents,
             query_plan=query_plan,
             min_rerank_score=settings.auto_ingest_claimlens_rerank_min_score,
         )
+        patents = selection.patents
+        calls_used = selection.calls_used
         if not patents:
             result = AutoIngestResult(
                 status="low_relevance" if query_plan else "no_data",
                 mode="claimlens",
                 kipris_calls_used=calls_used,
+                rerank_candidates=selection.rerank_candidates,
+                rerank_min_score=selection.min_score,
                 message=(
                     "KIPRIS 후보는 있었지만 침해 검색에 사용할 만큼 유사한 특허를 찾지 못했습니다."
                     if query_plan
@@ -178,6 +221,8 @@ async def maybe_auto_ingest_for_claimlens(
             patents_saved=len(patents),
             claimlens_patents_saved=claimlens_saved,
             agent_vectors_stored=agent_vectors,
+            rerank_candidates=selection.rerank_candidates,
+            rerank_min_score=selection.min_score,
             message=f"샘플 특허 {claimlens_saved}건의 청구항을 ClaimLens에 저장했습니다.",
         )
         _record_result(query, result)
@@ -198,7 +243,7 @@ async def _search_sample_patents(
     max_patents: int,
     query_plan: PatentQueryPlan | None = None,
     min_rerank_score: float = 0.0,
-) -> tuple[list[PatentItem], int]:
+) -> PatentSelectionResult:
     calls_used = 0
     patents_by_number: dict[str, PatentItem] = {}
     attempts = _build_search_attempts(query, query_plan)
@@ -245,13 +290,19 @@ async def _search_sample_patents(
 
     candidates = list(patents_by_number.values())
     if query_plan is None:
-        return candidates[:max_patents], calls_used
-    ranked = rerank_patents(
+        return PatentSelectionResult(
+            patents=candidates[:max_patents],
+            calls_used=calls_used,
+            rerank_candidates=[],
+            min_score=min_rerank_score,
+        )
+    ranked_all = rerank_patents(
         query_plan,
         candidates,
-        top_k=max_patents,
-        min_score=min_rerank_score,
+        top_k=_candidate_limit(max_patents, query_plan),
+        min_score=0.0,
     )
+    ranked = [item for item in ranked_all if item.score >= min_rerank_score][:max_patents]
     if not ranked and deferred_attempts:
         fallback_candidates, fallback_calls = await _collect_from_attempts(
             deferred_attempts,
@@ -259,13 +310,29 @@ async def _search_sample_patents(
             candidate_limit=candidate_limit,
         )
         calls_used += fallback_calls
-        ranked = rerank_patents(
+        ranked_all = rerank_patents(
             query_plan,
             fallback_candidates,
-            top_k=max_patents,
-            min_score=min_rerank_score,
+            top_k=_candidate_limit(max_patents, query_plan),
+            min_score=0.0,
         )
-    return [item.patent for item in ranked], calls_used
+        ranked = [item for item in ranked_all if item.score >= min_rerank_score][:max_patents]
+    selected_numbers = {item.patent.application_number for item in ranked}
+    return PatentSelectionResult(
+        patents=[item.patent for item in ranked],
+        calls_used=calls_used,
+        rerank_candidates=[
+            RerankEventItem(
+                application_number=item.patent.application_number,
+                title=item.patent.invention_title,
+                applicant_name=item.patent.applicant_name,
+                score=item.score,
+                selected=item.patent.application_number in selected_numbers,
+            )
+            for item in ranked_all[:10]
+        ],
+        min_score=min_rerank_score,
+    )
 
 
 async def _collect_from_attempts(

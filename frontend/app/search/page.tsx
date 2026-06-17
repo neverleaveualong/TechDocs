@@ -8,7 +8,7 @@ import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { searchPatents, searchPatentsStream, streamClaimLensAnalysis } from "@/lib/api";
 import type { ClaimLensEvent } from "@/types/claimlens";
-import type { PatentSource } from "@/types/search";
+import type { PatentSource, SearchStreamEvent } from "@/types/search";
 
 type SearchMode = "rag" | "claimlens";
 
@@ -33,6 +33,7 @@ export default function SearchPage() {
   const [streamedAnswer, setStreamedAnswer] = useState("");
   const [streamedSources, setStreamedSources] = useState<PatentSource[]>([]);
   const [queryLogId, setQueryLogId] = useState<number | undefined>(undefined);
+  const [ragEvents, setRagEvents] = useState<SearchStreamEvent[]>([]);
   
   // ClaimLens States
   const [claimLensEvents, setClaimLensEvents] = useState<ClaimLensEvent[]>([]);
@@ -59,6 +60,7 @@ export default function SearchPage() {
     setStreamedAnswer("");
     setStreamedSources([]);
     setQueryLogId(undefined);
+    setRagEvents([]);
     
     // Reset ClaimLens results
     setClaimLensEvents([]);
@@ -72,6 +74,7 @@ export default function SearchPage() {
             query,
             (event) => {
               if (!isCurrentRun()) return;
+              setRagEvents((events) => [...events, event]);
               if (event.type === "sources") {
                 setStreamedSources(event.sources);
                 setIsLoading(false); // First meaningful chunk received
@@ -96,6 +99,7 @@ export default function SearchPage() {
           setIsStreaming(false);
           setStreamedAnswer("");
           setStreamedSources([]);
+          setRagEvents([]);
 
           const fallbackResult = await searchPatents(query);
           if (!isCurrentRun()) return;
@@ -139,6 +143,7 @@ export default function SearchPage() {
     setStreamedAnswer("");
     setStreamedSources([]);
     setQueryLogId(undefined);
+    setRagEvents([]);
     setClaimLensEvents([]);
     setActiveQuery("");
     setIsLoading(false);
@@ -255,10 +260,12 @@ export default function SearchPage() {
                 isStreaming={isStreaming}
               />
               <SearchResults sources={streamedSources} />
+              <AutoIngestDebugPanel events={ragEvents} />
               <ResetButton onClick={() => {
                 setStreamedAnswer("");
                 setStreamedSources([]);
                 setQueryLogId(undefined);
+                setRagEvents([]);
               }} />
             </div>
           )}
@@ -439,6 +446,7 @@ function ClaimLensResult({
               candidates.map((candidate, index) => <CandidateItem key={index} candidate={candidate} />)
             )}
           </SmallPanel>
+          <AutoIngestDebugPanel events={events} />
           <SmallPanel title="SSE 이벤트" count={events.length}>
             <div className="max-h-72 overflow-auto space-y-2">
               {events.map((event, index) => (
@@ -467,6 +475,59 @@ function StepPill({ state }: { state: "done" | "running" | "waiting" }) {
         ? "bg-amber-50 text-amber-700"
         : "bg-gray-100 text-gray-400";
   return <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${klass}`}>{label}</span>;
+}
+
+function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | SearchStreamEvent> }) {
+  const data = getAutoIngestData(events);
+  const candidates = Array.isArray(data.rerankCandidates) ? data.rerankCandidates : [];
+  if (!data.status && candidates.length === 0) {
+    return null;
+  }
+
+  return (
+    <SmallPanel title="자동 수집 점수" count={candidates.length}>
+      <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-bold text-gray-800">{String(data.status ?? "-")}</span>
+          <span className="font-mono text-[11px] text-teal-700">
+            cutoff {formatScore(data.rerankMinScore)}
+          </span>
+        </div>
+        {typeof data.message === "string" && data.message.length > 0 && (
+          <p className="mt-2 text-[11px] leading-5 text-gray-500">{data.message}</p>
+        )}
+      </div>
+      {candidates.slice(0, 5).map((candidate, index) => {
+        const item = asRecord(candidate);
+        const selected = item.selected === true;
+        return (
+          <div
+            key={`${String(item.applicationNumber ?? index)}-${index}`}
+            className={`rounded-lg border p-3 ${
+              selected ? "border-teal-100 bg-teal-50/70" : "border-gray-100 bg-gray-50"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs font-semibold leading-5 text-gray-900">
+                {String(item.title ?? "제목 없음")}
+              </p>
+              <span className={`font-mono text-[11px] ${selected ? "text-teal-700" : "text-gray-500"}`}>
+                {formatScore(item.score)}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="font-mono text-[10px] text-gray-400">
+                {String(item.applicationNumber ?? "-")}
+              </span>
+              <span className={`text-[10px] font-bold ${selected ? "text-teal-700" : "text-gray-400"}`}>
+                {selected ? "selected" : "filtered"}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </SmallPanel>
+  );
 }
 
 function ClaimChartPanel({ rows }: { rows: ClaimLensEvent[] }) {
@@ -645,6 +706,18 @@ function getToolResultArray(events: ClaimLensEvent[], tool: string, key: string)
   const data = events.findLast((event) => event.tool === tool && event.type === "tool_result")?.data;
   const value = asRecord(data)[key];
   return Array.isArray(value) ? value : [];
+}
+
+function getAutoIngestData(events: Array<ClaimLensEvent | SearchStreamEvent>): Record<string, unknown> {
+  const event = events.findLast((item) => item.type === "auto_ingest_completed");
+  if (!event || !("data" in event)) {
+    return {};
+  }
+  return asRecord(event.data);
+}
+
+function formatScore(value: unknown) {
+  return typeof value === "number" ? value.toFixed(3) : "-";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
