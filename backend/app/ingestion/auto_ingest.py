@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
 
@@ -14,9 +14,12 @@ from app.core.vectorstore import add_documents
 from app.db.database import SessionLocal
 from app.ingestion.document_loader import patents_to_documents
 from app.ingestion.kipris_client import kipris_client
+from app.ingestion.patent_reranker import rerank_patents
+from app.ingestion.query_terms import KiprisSearchAttempt, build_kipris_search_attempts
 from app.ingestion.text_splitter import get_text_splitter
 from app.models.auto_ingest import AutoIngestCache
 from app.models.claimlens import ClaimLensClaim, ClaimLensClaimElement, ClaimLensPatent
+from app.models.patent_query import PatentQueryPlan
 from app.models.patent import PatentItem
 
 logger = logging.getLogger(__name__)
@@ -56,7 +59,10 @@ class AutoIngestResult:
         }
 
 
-async def maybe_auto_ingest_for_rag(query: str) -> AutoIngestResult:
+async def maybe_auto_ingest_for_rag(
+    query: str,
+    query_plan: PatentQueryPlan | None = None,
+) -> AutoIngestResult:
     if not settings.auto_ingest_enabled:
         return AutoIngestResult(status="disabled", mode="rag", message="자동 수집이 꺼져 있습니다.")
 
@@ -64,7 +70,8 @@ async def maybe_auto_ingest_for_rag(query: str) -> AutoIngestResult:
     if cached:
         return cached
 
-    allowed, message = _within_budget(expected_calls=2)
+    expected_calls = settings.auto_ingest_search_attempts + (1 if settings.auto_ingest_fallback_applicant else 0)
+    allowed, message = _within_budget(expected_calls=expected_calls)
     if not allowed:
         result = AutoIngestResult(status="budget_exceeded", mode="rag", message=message)
         _record_result(query, result)
@@ -74,13 +81,19 @@ async def maybe_auto_ingest_for_rag(query: str) -> AutoIngestResult:
         patents, calls_used = await _search_sample_patents(
             query,
             max_patents=settings.auto_ingest_rag_max_patents,
+            query_plan=query_plan,
+            min_rerank_score=settings.auto_ingest_rag_rerank_min_score,
         )
         if not patents:
             result = AutoIngestResult(
-                status="no_data",
+                status="low_relevance" if query_plan else "no_data",
                 mode="rag",
                 kipris_calls_used=calls_used,
-                message="KIPRIS에서 수집할 샘플 특허를 찾지 못했습니다.",
+                message=(
+                    "KIPRIS 후보는 있었지만 사용자 질의와 충분히 유사한 특허를 찾지 못했습니다."
+                    if query_plan
+                    else "KIPRIS에서 수집할 샘플 특허를 찾지 못했습니다."
+                ),
             )
             _record_result(query, result)
             return result
@@ -113,7 +126,10 @@ async def maybe_auto_ingest_for_rag(query: str) -> AutoIngestResult:
         return result
 
 
-async def maybe_auto_ingest_for_claimlens(query: str) -> AutoIngestResult:
+async def maybe_auto_ingest_for_claimlens(
+    query: str,
+    query_plan: PatentQueryPlan | None = None,
+) -> AutoIngestResult:
     if not settings.auto_ingest_enabled or not settings.auto_ingest_claimlens_enabled:
         return AutoIngestResult(status="disabled", mode="claimlens", message="ClaimLens 자동 수집이 꺼져 있습니다.")
 
@@ -121,7 +137,11 @@ async def maybe_auto_ingest_for_claimlens(query: str) -> AutoIngestResult:
     if cached:
         return cached
 
-    expected_calls = 2 + settings.auto_ingest_claimlens_max_patents
+    expected_calls = (
+        settings.auto_ingest_search_attempts
+        + (1 if settings.auto_ingest_fallback_applicant else 0)
+        + settings.auto_ingest_claimlens_max_patents
+    )
     allowed, message = _within_budget(expected_calls=expected_calls)
     if not allowed:
         result = AutoIngestResult(status="budget_exceeded", mode="claimlens", message=message)
@@ -132,13 +152,19 @@ async def maybe_auto_ingest_for_claimlens(query: str) -> AutoIngestResult:
         patents, calls_used = await _search_sample_patents(
             query,
             max_patents=settings.auto_ingest_claimlens_max_patents,
+            query_plan=query_plan,
+            min_rerank_score=settings.auto_ingest_claimlens_rerank_min_score,
         )
         if not patents:
             result = AutoIngestResult(
-                status="no_data",
+                status="low_relevance" if query_plan else "no_data",
                 mode="claimlens",
                 kipris_calls_used=calls_used,
-                message="KIPRIS에서 침해 검색용 샘플 특허를 찾지 못했습니다.",
+                message=(
+                    "KIPRIS 후보는 있었지만 침해 검색에 사용할 만큼 유사한 특허를 찾지 못했습니다."
+                    if query_plan
+                    else "KIPRIS에서 침해 검색용 샘플 특허를 찾지 못했습니다."
+                ),
             )
             _record_result(query, result)
             return result
@@ -167,16 +193,43 @@ async def maybe_auto_ingest_for_claimlens(query: str) -> AutoIngestResult:
         return result
 
 
-async def _search_sample_patents(query: str, max_patents: int) -> tuple[list[PatentItem], int]:
+async def _search_sample_patents(
+    query: str,
+    max_patents: int,
+    query_plan: PatentQueryPlan | None = None,
+    min_rerank_score: float = 0.0,
+) -> tuple[list[PatentItem], int]:
     calls_used = 0
-    patents, _ = await kipris_client.search_patents(
-        applicant=query,
-        page=1,
-        num_of_rows=max_patents,
-    )
-    calls_used += 1
+    patents_by_number: dict[str, PatentItem] = {}
+    attempts = _build_search_attempts(query, query_plan)
+    strict_applicant = bool(query_plan and query_plan.applicant_candidates)
+    candidate_limit = _candidate_limit(max_patents, query_plan)
+    deferred_attempts: list[KiprisSearchAttempt] = []
 
-    if not patents and settings.auto_ingest_fallback_applicant:
+    for attempt in attempts:
+        if strict_applicant and not attempt.applicant and patents_by_number:
+            deferred_attempts.append(attempt)
+            continue
+        kwargs = attempt.to_kipris_kwargs()
+        num_rows = candidate_limit
+        if attempt.applicant and attempt.field != "applicant":
+            kwargs.pop("applicant", None)
+            num_rows = max(candidate_limit, 10)
+        patents, _ = await kipris_client.search_patents(
+            **kwargs,
+            page=1,
+            num_of_rows=num_rows,
+        )
+        calls_used += 1
+        patents = _filter_by_applicant(patents, attempt.applicant)
+        for patent in patents:
+            key = patent.application_number or patent.invention_title
+            if key and key not in patents_by_number:
+                patents_by_number[key] = patent
+        if len(patents_by_number) >= candidate_limit:
+            break
+
+    if not patents_by_number and settings.auto_ingest_fallback_applicant:
         fallback = settings.auto_ingest_fallback_applicant
         if _normalize_query(fallback) != _normalize_query(query):
             patents, _ = await kipris_client.search_patents(
@@ -185,8 +238,115 @@ async def _search_sample_patents(query: str, max_patents: int) -> tuple[list[Pat
                 num_of_rows=max_patents,
             )
             calls_used += 1
+            for patent in patents:
+                key = patent.application_number or patent.invention_title
+                if key and key not in patents_by_number:
+                    patents_by_number[key] = patent
 
-    return patents[:max_patents], calls_used
+    candidates = list(patents_by_number.values())
+    if query_plan is None:
+        return candidates[:max_patents], calls_used
+    ranked = rerank_patents(
+        query_plan,
+        candidates,
+        top_k=max_patents,
+        min_score=min_rerank_score,
+    )
+    if not ranked and deferred_attempts:
+        fallback_candidates, fallback_calls = await _collect_from_attempts(
+            deferred_attempts,
+            max_patents=max_patents,
+            candidate_limit=candidate_limit,
+        )
+        calls_used += fallback_calls
+        ranked = rerank_patents(
+            query_plan,
+            fallback_candidates,
+            top_k=max_patents,
+            min_score=min_rerank_score,
+        )
+    return [item.patent for item in ranked], calls_used
+
+
+async def _collect_from_attempts(
+    attempts: list[KiprisSearchAttempt],
+    *,
+    max_patents: int,
+    candidate_limit: int,
+) -> tuple[list[PatentItem], int]:
+    calls_used = 0
+    patents_by_number: dict[str, PatentItem] = {}
+    for attempt in attempts:
+        patents, _ = await kipris_client.search_patents(
+            **attempt.to_kipris_kwargs(),
+            page=1,
+            num_of_rows=candidate_limit,
+        )
+        calls_used += 1
+        for patent in patents:
+            key = patent.application_number or patent.invention_title
+            if key and key not in patents_by_number:
+                patents_by_number[key] = patent
+        if len(patents_by_number) >= candidate_limit:
+            break
+    return list(patents_by_number.values())[: max(max_patents, candidate_limit)], calls_used
+
+
+def _candidate_limit(max_patents: int, query_plan: PatentQueryPlan | None) -> int:
+    if query_plan is None:
+        return max_patents
+    return max(max_patents * 5, 10)
+
+
+def _filter_by_applicant(patents: list[PatentItem], applicant: str | None) -> list[PatentItem]:
+    if not applicant:
+        return patents
+    normalized_applicant = _normalize_query(applicant)
+    return [
+        patent
+        for patent in patents
+        if normalized_applicant in _normalize_query(patent.applicant_name)
+    ]
+
+
+def _build_search_attempts(query: str, query_plan: PatentQueryPlan | None):
+    if query_plan is None:
+        return build_kipris_search_attempts(
+            query,
+            max_attempts=settings.auto_ingest_search_attempts,
+        )
+
+    attempts = []
+    applicants = query_plan.applicant_candidates[:3]
+    keywords = query_plan.kipris_queries[: settings.auto_ingest_search_attempts]
+    for applicant in applicants:
+        for keyword in keywords:
+            attempts.append(("invention_title", keyword, applicant))
+            attempts.append(("abstract", keyword, applicant))
+    for keyword in query_plan.kipris_queries[: settings.auto_ingest_search_attempts]:
+        attempts.append(("invention_title", keyword, None))
+        attempts.append(("abstract", keyword, None))
+    for keyword in query_plan.search_keywords[:2]:
+        attempts.append(("invention_title", keyword, None))
+    for applicant in applicants:
+        attempts.append(("applicant", applicant, None))
+
+    fallback_attempts = build_kipris_search_attempts(
+        query_plan.rag_query or query,
+        max_attempts=settings.auto_ingest_search_attempts,
+    )
+    for attempt in fallback_attempts:
+        attempts.append((attempt.field, attempt.value, attempt.applicant))
+
+    deduped = []
+    seen = set()
+    for field, value, applicant in attempts:
+        key = (field, value.lower(), (applicant or "").lower())
+        if not value or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(KiprisSearchAttempt(field, value, applicant=applicant))
+    return deduped[: settings.auto_ingest_search_attempts]
 
 
 async def _save_claimlens_patents(patents: list[PatentItem]) -> tuple[int, int, int]:
@@ -335,7 +495,7 @@ def _cached_result(query: str, mode: str) -> AutoIngestResult | None:
             db.query(AutoIngestCache)
             .filter(AutoIngestCache.query_hash == _query_hash(query, mode))
             .filter(AutoIngestCache.last_ingested_at >= cutoff)
-            .filter(AutoIngestCache.status.in_(["success", "no_data", "no_claims"]))
+            .filter(AutoIngestCache.status.in_(["success", "no_data", "no_claims", "low_relevance"]))
             .order_by(AutoIngestCache.last_ingested_at.desc())
             .first()
         )
@@ -415,4 +575,4 @@ def _normalize_query(query: str) -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)

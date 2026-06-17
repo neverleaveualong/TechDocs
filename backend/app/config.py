@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     auto_ingest_max_daily_calls: int = 20
     auto_ingest_max_monthly_calls: int = 300
     auto_ingest_cache_ttl_days: int = 30
+    auto_ingest_search_attempts: int = 4
+    auto_ingest_rag_rerank_min_score: float = 0.56
+    auto_ingest_claimlens_rerank_min_score: float = 0.60
     auto_ingest_rag_max_patents: int = 3
     auto_ingest_rag_max_chunks_per_patent: int = 2
     auto_ingest_claimlens_enabled: bool = True

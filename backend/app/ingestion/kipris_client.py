@@ -14,7 +14,10 @@ class KiprisClient:
 
     async def search_patents(
         self,
-        applicant: str,
+        applicant: str = "",
+        invention_title: str = "",
+        abstract: str = "",
+        keyword: str = "",
         start_date: str = "",
         end_date: str = "",
         page: int = 1,
@@ -24,10 +27,17 @@ class KiprisClient:
         url = f"{self.base_url}/patUtiModInfoSearchSevice/getAdvancedSearch"
         params = {
             "ServiceKey": self.api_key,
-            "applicant": applicant,
             "numOfRows": num_of_rows,
             "pageNo": page,
         }
+        if applicant:
+            params["applicant"] = applicant
+        if invention_title:
+            params["inventionTitle"] = invention_title
+        if abstract:
+            params["astrtCont"] = abstract
+        if keyword:
+            params["word"] = keyword
         if start_date:
             params["applicationDateFrom"] = start_date
         if end_date:
@@ -40,12 +50,12 @@ class KiprisClient:
         data = xmltodict.parse(response.text)
         body = data.get("response", {}).get("body") or {}
         items_block = body.get("items") or {}
-        total_count = int(items_block.get("totalCount", 0) or 0)
         items = items_block.get("item", []) or []
 
         # 단건이면 리스트로 래핑
         if isinstance(items, dict):
             items = [items]
+        total_count = int(body.get("totalCount") or items_block.get("totalCount") or len(items))
 
         # PatentItem으로 변환
         patents = [

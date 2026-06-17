@@ -16,6 +16,10 @@ export interface SearchResponse {
 
 export type SearchStreamEvent =
   | {
+      type: "query_plan";
+      data: Record<string, unknown>;
+    }
+  | {
       type: "sources";
       query: string;
       sources: PatentSource[];

@@ -16,6 +16,7 @@ class ClaimLensAgentEvent(BaseModel):
         "step_completed",
         "claim_chart_row",
         "final_report",
+        "query_plan",
         "auto_ingest_started",
         "auto_ingest_completed",
         "retry_search",
