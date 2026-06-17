@@ -108,10 +108,15 @@ class ClaimLensVectorIndex:
         return saved
 
     def delete_patent_documents(self, patent_id: int) -> None:
-        self._index.delete(
-            namespace=self.namespace,
-            filter={"patent_id": {"$eq": patent_id}},
-        )
+        try:
+            self._index.delete(
+                namespace=self.namespace,
+                filter={"patent_id": {"$eq": patent_id}},
+            )
+        except Exception as exc:
+            if "Namespace not found" in str(exc):
+                return
+            raise
 
 
 
