@@ -4,10 +4,13 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pinecone import Pinecone
+from datetime import UTC, datetime
+
 from sqlalchemy import distinct, func
 
 from app.config import settings
 from app.db.database import SessionLocal
+from app.models.auto_ingest import AutoIngestCache
 from app.models.claimlens import ClaimLensClaim, ClaimLensClaimElement, ClaimLensPatent
 
 router = APIRouter()
@@ -32,6 +35,7 @@ async def get_stats():
         company_sample_limit = COMPANY_SAMPLE_LIMIT if company_namespace else 0
         companies = _company_breakdown(index, company_namespace, limit=company_sample_limit)
         claimlens_stats = _claimlens_db_stats()
+        auto_ingest_stats = _auto_ingest_stats()
 
         return {
             "index_name": settings.pinecone_index_name,
@@ -47,6 +51,7 @@ async def get_stats():
             },
             "companies": companies,
             "claimlens": claimlens_stats,
+            "auto_ingest": auto_ingest_stats,
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"통계 조회 실패: {exc}") from exc
@@ -136,3 +141,33 @@ def _claimlens_db_stats() -> dict[str, int]:
         "claim_elements": int(claim_elements_count),
         "patents_with_claims": int(patents_with_claims_count),
     }
+
+
+def _auto_ingest_stats() -> dict[str, int | bool]:
+    now = datetime.now(UTC)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    with SessionLocal() as db:
+        daily_calls = _sum_auto_ingest_calls(db, day_start)
+        monthly_calls = _sum_auto_ingest_calls(db, month_start)
+        total_runs = db.query(func.count(AutoIngestCache.id)).scalar() or 0
+
+    return {
+        "enabled": settings.auto_ingest_enabled,
+        "daily_kipris_calls": daily_calls,
+        "monthly_kipris_calls": monthly_calls,
+        "daily_limit": settings.auto_ingest_max_daily_calls,
+        "monthly_limit": settings.auto_ingest_max_monthly_calls,
+        "cache_ttl_days": settings.auto_ingest_cache_ttl_days,
+        "total_runs": int(total_runs),
+    }
+
+
+def _sum_auto_ingest_calls(db, since: datetime) -> int:
+    return int(
+        db.query(func.coalesce(func.sum(AutoIngestCache.kipris_calls_used), 0))
+        .filter(AutoIngestCache.last_ingested_at >= since)
+        .scalar()
+        or 0
+    )

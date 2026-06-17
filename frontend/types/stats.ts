@@ -18,6 +18,16 @@ export interface ClaimLensStats {
   patents_with_claims: number;
 }
 
+export interface AutoIngestStats {
+  enabled: boolean;
+  daily_kipris_calls: number;
+  monthly_kipris_calls: number;
+  daily_limit: number;
+  monthly_limit: number;
+  cache_ttl_days: number;
+  total_runs: number;
+}
+
 export interface Stats {
   total_vectors: number;
   dimension: number;
@@ -32,4 +42,5 @@ export interface Stats {
   };
   companies: CompanyStats[];
   claimlens: ClaimLensStats;
+  auto_ingest: AutoIngestStats;
 }

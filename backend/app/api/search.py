@@ -5,9 +5,11 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
+from app.core.patent_query_agent import build_patent_query_plan
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
 from app.db.database import SessionLocal
+from app.ingestion.auto_ingest import maybe_auto_ingest_for_rag
 from app.models.feedback import QueryLog
 from app.models.search import (
     SearchRequest,
@@ -52,13 +54,32 @@ def _encode_stream_event(payload: dict) -> bytes:
 async def search(request: Request, body: SearchRequest):
     start = time.time()
     try:
-        result = rag_pipeline.search(
-            query=body.query,
+        query_plan = build_patent_query_plan(body.query, intent_hint="rag_search")
+        retrieval_query = query_plan.rag_query or body.query
+        prepared = rag_pipeline.prepare_search(
+            query=retrieval_query,
             top_k=body.top_k,
             namespace=settings.rag_namespace,
             use_hybrid=body.use_hybrid,
             use_reranker=body.use_reranker,
         )
+        if body.auto_ingest and not prepared["sources"]:
+            auto_ingest_result = await maybe_auto_ingest_for_rag(body.query, query_plan=query_plan)
+            if auto_ingest_result.should_retry_search:
+                prepared = rag_pipeline.prepare_search(
+                    query=retrieval_query,
+                    top_k=body.top_k,
+                    namespace=settings.rag_namespace,
+                    use_hybrid=body.use_hybrid,
+                    use_reranker=body.use_reranker,
+                )
+
+        answer = rag_pipeline.llm.invoke(prepared["prompt_value"])
+        result = {
+            "answer": answer.content if hasattr(answer, "content") else str(answer),
+            "sources": prepared["sources"],
+            "query": body.query,
+        }
         elapsed_ms = int((time.time() - start) * 1000)
         result["query_log_id"] = _save_query_log(
             query=body.query,
@@ -80,13 +101,50 @@ async def search_stream(request: Request, body: SearchRequest):
     async def event_generator():
         answer_chunks: list[str] = []
         try:
+            query_plan = build_patent_query_plan(body.query, intent_hint="rag_search")
+            yield _encode_stream_event(
+                {
+                    "type": "query_plan",
+                    "data": query_plan.to_event_data(),
+                }
+            )
+            retrieval_query = query_plan.rag_query or body.query
             prepared = rag_pipeline.prepare_search(
-                query=body.query,
+                query=retrieval_query,
                 top_k=body.top_k,
                 namespace=settings.rag_namespace,
                 use_hybrid=body.use_hybrid,
                 use_reranker=body.use_reranker,
             )
+
+            if body.auto_ingest and not prepared["sources"]:
+                yield _encode_stream_event(
+                    {
+                        "type": "auto_ingest_started",
+                        "message": "관련 데이터가 부족해 KIPRIS에서 샘플 특허를 소량 수집합니다.",
+                    }
+                )
+                auto_ingest_result = await maybe_auto_ingest_for_rag(body.query, query_plan=query_plan)
+                yield _encode_stream_event(
+                    {
+                        "type": "auto_ingest_completed",
+                        "data": auto_ingest_result.to_event_data(),
+                    }
+                )
+                if auto_ingest_result.should_retry_search:
+                    yield _encode_stream_event(
+                        {
+                            "type": "retry_search",
+                            "message": "수집한 샘플 데이터로 다시 검색합니다.",
+                        }
+                    )
+                    prepared = rag_pipeline.prepare_search(
+                        query=retrieval_query,
+                        top_k=body.top_k,
+                        namespace=settings.rag_namespace,
+                        use_hybrid=body.use_hybrid,
+                        use_reranker=body.use_reranker,
+                    )
 
             yield _encode_stream_event(
                 {

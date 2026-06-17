@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const ragVectors = stats?.namespaces.rag.vector_count ?? 0;
   const agentVectors = stats?.namespaces.agent.vector_count ?? 0;
   const claimlens = stats?.claimlens;
+  const autoIngest = stats?.auto_ingest;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -118,6 +119,26 @@ export default function DashboardPage() {
               <SubMetric label="독립항" value={claimlens?.independent_claims ?? 0} description="독립 청구항" />
               <SubMetric label="청구항 보유 특허" value={claimlens?.patents_with_claims ?? 0} description="청구항 원문이 있는 특허" />
             </section>
+
+            {autoIngest && (
+              <section className="grid gap-3 sm:grid-cols-3">
+                <SubMetric
+                  label="오늘 KIPRIS 자동 호출"
+                  value={autoIngest.daily_kipris_calls}
+                  description={`일 한도 ${autoIngest.daily_limit.toLocaleString()}회`}
+                />
+                <SubMetric
+                  label="이번 달 KIPRIS 자동 호출"
+                  value={autoIngest.monthly_kipris_calls}
+                  description={`월 한도 ${autoIngest.monthly_limit.toLocaleString()}회`}
+                />
+                <SubMetric
+                  label="자동 수집 실행"
+                  value={autoIngest.total_runs}
+                  description={`검색어 캐시 ${autoIngest.cache_ttl_days}일`}
+                />
+              </section>
+            )}
 
             {stats.company_stats_sampled && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">

@@ -16,6 +16,10 @@ export interface SearchResponse {
 
 export type SearchStreamEvent =
   | {
+      type: "query_plan";
+      data: Record<string, unknown>;
+    }
+  | {
       type: "sources";
       query: string;
       sources: PatentSource[];
@@ -23,6 +27,14 @@ export type SearchStreamEvent =
   | {
       type: "answer_delta";
       delta: string;
+    }
+  | {
+      type: "auto_ingest_started" | "retry_search";
+      message: string;
+    }
+  | {
+      type: "auto_ingest_completed";
+      data: Record<string, unknown>;
     }
   | {
       type: "done";

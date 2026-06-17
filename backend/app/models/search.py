@@ -6,6 +6,7 @@ class SearchRequest(BaseModel):
     top_k: int = 5
     use_hybrid: bool = False
     use_reranker: bool = False
+    auto_ingest: bool = True
 
 
 class PatentSource(BaseModel):

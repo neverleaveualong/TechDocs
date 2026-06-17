@@ -4,9 +4,11 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from app.core.patent_query_agent import build_patent_query_plan
 from app.core.claimlens.vector_search import search_claim_candidates
 from app.core.claimlens.workflow import run_claimlens_v1_workflow
 from app.db.database import SessionLocal
+from app.ingestion.auto_ingest import maybe_auto_ingest_for_claimlens
 from app.models.claimlens_api import ClaimLensAgentEvent, ClaimLensAnalysisRequest
 
 router = APIRouter()
@@ -39,6 +41,16 @@ async def _stream_analysis(request: ClaimLensAnalysisRequest) -> AsyncIterator[s
         yield _encode_sse(ClaimLensAgentEvent(type="step_started", step=step, message=message))
 
     try:
+        query_plan = build_patent_query_plan(request.product_description, intent_hint="claim_analysis")
+        claim_search_query = query_plan.rag_query or request.product_description
+        yield _encode_sse(
+            ClaimLensAgentEvent(
+                type="query_plan",
+                step="input_analysis",
+                data=query_plan.to_event_data(),
+            )
+        )
+
         with SessionLocal() as db:
 
             state = run_claimlens_v1_workflow(
@@ -46,10 +58,48 @@ async def _stream_analysis(request: ClaimLensAnalysisRequest) -> AsyncIterator[s
                 technical_domain=request.technical_domain,
                 candidate_searcher=lambda query: search_claim_candidates(
                     db,
-                    query,
+                    claim_search_query or query,
                     top_k=request.top_k,
                 ),
             )
+
+        if _needs_auto_ingest(state):
+            yield _encode_sse(
+                ClaimLensAgentEvent(
+                    type="auto_ingest_started",
+                    step="patent_search",
+                    message="관련 청구항 데이터가 부족해 KIPRIS에서 샘플 특허 1건을 수집합니다.",
+                )
+            )
+            auto_ingest_result = await maybe_auto_ingest_for_claimlens(
+                request.product_description,
+                query_plan=query_plan,
+            )
+            yield _encode_sse(
+                ClaimLensAgentEvent(
+                    type="auto_ingest_completed",
+                    step="patent_search",
+                    data=auto_ingest_result.to_event_data(),
+                )
+            )
+            if auto_ingest_result.should_retry_search:
+                yield _encode_sse(
+                    ClaimLensAgentEvent(
+                        type="retry_search",
+                        step="patent_search",
+                        message="수집한 청구항 데이터로 침해 검색을 다시 실행합니다.",
+                    )
+                )
+                with SessionLocal() as db:
+                    state = run_claimlens_v1_workflow(
+                        request.product_description,
+                        technical_domain=request.technical_domain,
+                        candidate_searcher=lambda query: search_claim_candidates(
+                            db,
+                            claim_search_query or query,
+                            top_k=request.top_k,
+                        ),
+                    )
     except Exception as exc:
         yield _encode_sse(
             ClaimLensAgentEvent(
@@ -98,3 +148,7 @@ async def _stream_analysis(request: ClaimLensAnalysisRequest) -> AsyncIterator[s
             data={"markdown": state.get("final_report", "")},
         )
     )
+
+
+def _needs_auto_ingest(state: dict) -> bool:
+    return not state.get("patent_candidates") or not state.get("claim_elements")
