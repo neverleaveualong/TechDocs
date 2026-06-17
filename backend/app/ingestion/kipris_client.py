@@ -5,11 +5,16 @@ from app.config import settings
 from app.models.patent import PatentItem
 
 
+def _normalize_kipris_base_url(base_url: str) -> str:
+    normalized = base_url.rstrip("/")
+    return normalized.replace("/kipoapi/", "/kipo-api/")
+
+
 class KiprisClient:
     """KIPRIS Open API 클라이언트 — 특허 데이터 수집"""
 
     def __init__(self):
-        self.base_url = settings.kipris_base_url
+        self.base_url = _normalize_kipris_base_url(settings.kipris_base_url)
         self.api_key = settings.kipris_api_key
 
     async def search_patents(
