@@ -14,6 +14,8 @@ class PatentSource(BaseModel):
     applicant_name: str
     application_number: str
     application_date: str
+    score: float | None = None
+    score_type: str = ""
     relevance_text: str
 
 

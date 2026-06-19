@@ -479,13 +479,45 @@ function StepPill({ state }: { state: "done" | "running" | "waiting" }) {
 
 function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | SearchStreamEvent> }) {
   const data = getAutoIngestData(events);
+  const quality = getSearchQualityData(events);
   const candidates = Array.isArray(data.rerankCandidates) ? data.rerankCandidates : [];
-  if (!data.status && candidates.length === 0) {
+  const matchedTerms = Array.isArray(quality.matchedTerms) ? quality.matchedTerms : [];
+  const hasQuality = typeof quality.reason === "string" && quality.reason.length > 0;
+  if (!data.status && candidates.length === 0 && !hasQuality) {
     return null;
   }
 
   return (
-    <SmallPanel title="자동 수집 점수" count={candidates.length}>
+    <SmallPanel title="검색 품질 / 자동 수집" count={candidates.length}>
+      {hasQuality && (
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold text-gray-800">{String(quality.reason)}</span>
+            <span className="font-mono text-[11px] text-gray-500">
+              best {formatScore(quality.bestScore)}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+              sources {String(quality.sourceCount ?? 0)}
+            </span>
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
+                quality.shouldAutoIngest === true
+                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                  : "bg-teal-50 text-teal-700 border-teal-100"
+              }`}
+            >
+              {quality.shouldAutoIngest === true ? "auto ingest needed" : "enough sources"}
+            </span>
+          </div>
+          {matchedTerms.length > 0 && (
+            <p className="mt-2 text-[11px] leading-5 text-gray-500">
+              matched: {matchedTerms.slice(0, 6).map(String).join(", ")}
+            </p>
+          )}
+        </div>
+      )}
       <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-bold text-gray-800">{String(data.status ?? "-")}</span>
@@ -710,6 +742,14 @@ function getToolResultArray(events: ClaimLensEvent[], tool: string, key: string)
 
 function getAutoIngestData(events: Array<ClaimLensEvent | SearchStreamEvent>): Record<string, unknown> {
   const event = events.findLast((item) => item.type === "auto_ingest_completed");
+  if (!event || !("data" in event)) {
+    return {};
+  }
+  return asRecord(event.data);
+}
+
+function getSearchQualityData(events: Array<ClaimLensEvent | SearchStreamEvent>): Record<string, unknown> {
+  const event = events.findLast((item) => item.type === "search_quality");
   if (!event || !("data" in event)) {
     return {};
   }
