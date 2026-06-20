@@ -64,6 +64,14 @@ class RAGPipeline:
             "query": query,
         }
 
+    def prepare_empty_search(self, query: str) -> dict:
+        prompt_value = SEARCH_PROMPT.invoke({"context": "", "question": query})
+        return {
+            "prompt_value": prompt_value,
+            "sources": [],
+            "query": query,
+        }
+
     async def stream_answer(self, prompt_value):
         """Yield answer chunks from the chat model for fetch streaming."""
         async for chunk in self.llm.astream(prompt_value):
@@ -101,6 +109,8 @@ class RAGPipeline:
                     "application_number": app_num,
                     "application_date": doc.metadata.get("application_date", ""),
                     "register_status": doc.metadata.get("register_status", ""),
+                    "score": doc.metadata.get("_retrieval_score"),
+                    "score_type": doc.metadata.get("_retrieval_score_type", ""),
                     "relevance_text": doc.page_content[:200],
                     "full_content": doc.page_content,
                 }
@@ -110,10 +120,14 @@ class RAGPipeline:
     def _vector_search(self, query: str, top_k: int = 5, namespace: str = None) -> list[Document]:
         """Vector-only retrieval."""
         vectorstore = get_vectorstore(namespace=namespace)
-        retriever = vectorstore.as_retriever(
-            search_kwargs={"k": top_k, "namespace": namespace}
-        )
-        return retriever.invoke(query)
+        results = vectorstore.similarity_search_with_score(query, k=top_k)
+        docs = []
+        for doc, score in results:
+            metadata = dict(doc.metadata)
+            metadata["_retrieval_score"] = float(score)
+            metadata["_retrieval_score_type"] = "vector"
+            docs.append(Document(page_content=doc.page_content, metadata=metadata))
+        return docs
 
     def _hybrid_search(
         self,
@@ -133,9 +147,12 @@ class RAGPipeline:
 
         docs = []
         for item in results[:top_k]:
+            metadata = dict(item.get("metadata", {}))
+            metadata["_retrieval_score"] = float(item.get("rrf_score", item.get("score", 0.0)) or 0.0)
+            metadata["_retrieval_score_type"] = "rrf"
             doc = Document(
                 page_content=item.get("page_content", ""),
-                metadata=item.get("metadata", {}),
+                metadata=metadata,
             )
             docs.append(doc)
         return docs

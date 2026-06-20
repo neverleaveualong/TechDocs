@@ -8,6 +8,7 @@ from app.config import settings
 from app.core.patent_query_agent import build_patent_query_plan
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
+from app.core.search_quality import evaluate_search_quality
 from app.db.database import SessionLocal
 from app.ingestion.auto_ingest import maybe_auto_ingest_for_rag
 from app.models.feedback import QueryLog
@@ -49,6 +50,16 @@ def _encode_stream_event(payload: dict) -> bytes:
     return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
 
 
+def _prepare_rag_search(body: SearchRequest, retrieval_query: str) -> dict:
+    return rag_pipeline.prepare_search(
+        query=retrieval_query,
+        top_k=body.top_k,
+        namespace=settings.rag_namespace,
+        use_hybrid=body.use_hybrid,
+        use_reranker=body.use_reranker,
+    )
+
+
 @router.post("/search", response_model=SearchResponse)
 @limiter.limit("10/minute")
 async def search(request: Request, body: SearchRequest):
@@ -56,23 +67,15 @@ async def search(request: Request, body: SearchRequest):
     try:
         query_plan = build_patent_query_plan(body.query, intent_hint="rag_search")
         retrieval_query = query_plan.rag_query or body.query
-        prepared = rag_pipeline.prepare_search(
-            query=retrieval_query,
-            top_k=body.top_k,
-            namespace=settings.rag_namespace,
-            use_hybrid=body.use_hybrid,
-            use_reranker=body.use_reranker,
-        )
-        if body.auto_ingest and not prepared["sources"]:
+        prepared = _prepare_rag_search(body, retrieval_query)
+        quality = evaluate_search_quality(prepared["sources"], query_plan)
+        if body.auto_ingest and quality.should_auto_ingest:
             auto_ingest_result = await maybe_auto_ingest_for_rag(body.query, query_plan=query_plan)
             if auto_ingest_result.should_retry_search:
-                prepared = rag_pipeline.prepare_search(
-                    query=retrieval_query,
-                    top_k=body.top_k,
-                    namespace=settings.rag_namespace,
-                    use_hybrid=body.use_hybrid,
-                    use_reranker=body.use_reranker,
-                )
+                prepared = _prepare_rag_search(body, retrieval_query)
+                quality = evaluate_search_quality(prepared["sources"], query_plan)
+            if quality.should_auto_ingest:
+                prepared = rag_pipeline.prepare_empty_search(retrieval_query)
 
         answer = rag_pipeline.llm.invoke(prepared["prompt_value"])
         result = {
@@ -109,18 +112,20 @@ async def search_stream(request: Request, body: SearchRequest):
                 }
             )
             retrieval_query = query_plan.rag_query or body.query
-            prepared = rag_pipeline.prepare_search(
-                query=retrieval_query,
-                top_k=body.top_k,
-                namespace=settings.rag_namespace,
-                use_hybrid=body.use_hybrid,
-                use_reranker=body.use_reranker,
+            prepared = _prepare_rag_search(body, retrieval_query)
+            quality = evaluate_search_quality(prepared["sources"], query_plan)
+            yield _encode_stream_event(
+                {
+                    "type": "search_quality",
+                    "data": quality.to_event_data(),
+                }
             )
 
-            if body.auto_ingest and not prepared["sources"]:
+            if body.auto_ingest and quality.should_auto_ingest:
                 yield _encode_stream_event(
                     {
                         "type": "auto_ingest_started",
+                        "reason": quality.reason,
                         "message": "관련 데이터가 부족해 KIPRIS에서 샘플 특허를 소량 수집합니다.",
                     }
                 )
@@ -138,13 +143,19 @@ async def search_stream(request: Request, body: SearchRequest):
                             "message": "수집한 샘플 데이터로 다시 검색합니다.",
                         }
                     )
-                    prepared = rag_pipeline.prepare_search(
-                        query=retrieval_query,
-                        top_k=body.top_k,
-                        namespace=settings.rag_namespace,
-                        use_hybrid=body.use_hybrid,
-                        use_reranker=body.use_reranker,
+                    prepared = _prepare_rag_search(body, retrieval_query)
+                    retry_quality = evaluate_search_quality(prepared["sources"], query_plan)
+                    yield _encode_stream_event(
+                        {
+                            "type": "search_quality",
+                            "phase": "retry",
+                            "data": retry_quality.to_event_data(),
+                        }
                     )
+                    quality = retry_quality
+
+                if quality.should_auto_ingest:
+                    prepared = rag_pipeline.prepare_empty_search(retrieval_query)
 
             yield _encode_stream_event(
                 {

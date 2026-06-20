@@ -4,6 +4,8 @@ export interface PatentSource {
   application_number: string;
   application_date: string;
   register_status: string;
+  score?: number | null;
+  score_type?: string;
   relevance_text: string;
 }
 
@@ -31,9 +33,15 @@ export type SearchStreamEvent =
   | {
       type: "auto_ingest_started" | "retry_search";
       message: string;
+      reason?: string;
     }
   | {
       type: "auto_ingest_completed";
+      data: Record<string, unknown>;
+    }
+  | {
+      type: "search_quality";
+      phase?: "retry";
       data: Record<string, unknown>;
     }
   | {
