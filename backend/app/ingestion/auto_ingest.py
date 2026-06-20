@@ -75,7 +75,7 @@ class AutoIngestResult:
 
     @property
     def should_retry_search(self) -> bool:
-        return self.status == "success" and (
+        return self.status in {"success", "cached"} and (
             self.rag_vectors_stored > 0
             or self.claimlens_patents_saved > 0
             or self.agent_vectors_stored > 0

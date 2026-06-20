@@ -66,7 +66,7 @@ async def search(request: Request, body: SearchRequest):
     start = time.time()
     try:
         query_plan = build_patent_query_plan(body.query, intent_hint="rag_search")
-        retrieval_query = query_plan.rag_query or body.query
+        retrieval_query = body.query
         prepared = _prepare_rag_search(body, retrieval_query)
         quality = evaluate_search_quality(prepared["sources"], query_plan)
         if body.auto_ingest and quality.should_auto_ingest:
@@ -111,7 +111,7 @@ async def search_stream(request: Request, body: SearchRequest):
                     "data": query_plan.to_event_data(),
                 }
             )
-            retrieval_query = query_plan.rag_query or body.query
+            retrieval_query = body.query
             prepared = _prepare_rag_search(body, retrieval_query)
             quality = evaluate_search_quality(prepared["sources"], query_plan)
             yield _encode_stream_event(
