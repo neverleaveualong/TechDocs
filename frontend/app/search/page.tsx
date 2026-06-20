@@ -555,6 +555,23 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
                 {selected ? "selected" : "filtered"}
               </span>
             </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {typeof item.selectionReason === "string" && (
+                <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+                  {item.selectionReason}
+                </span>
+              )}
+              {typeof item.coverageCount === "number" && (
+                <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+                  coverage {String(item.coverageCount)}
+                </span>
+              )}
+            </div>
+            {Array.isArray(item.matchedTerms) && item.matchedTerms.length > 0 && (
+              <p className="mt-2 text-[11px] leading-5 text-gray-500">
+                matched: {item.matchedTerms.slice(0, 5).map(String).join(", ")}
+              </p>
+            )}
           </div>
         );
       })}

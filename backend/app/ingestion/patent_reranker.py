@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.core.embeddings import get_embeddings
 from app.models.patent import PatentItem
@@ -12,6 +12,11 @@ from app.models.patent_query import PatentQueryPlan
 class RerankedPatent:
     patent: PatentItem
     score: float
+    matched_terms: list[str] = field(default_factory=list)
+
+    @property
+    def coverage_count(self) -> int:
+        return len(self.matched_terms)
 
 
 def rerank_patents(
@@ -36,6 +41,7 @@ def rerank_patents(
         RerankedPatent(
             patent=patent,
             score=_cosine_similarity(query_vector, patent_vector),
+            matched_terms=_matched_query_terms(query_plan, patent),
         )
         for patent, patent_vector in zip(patents, patent_vectors, strict=True)
     ]
@@ -69,6 +75,47 @@ def _patent_text(patent: PatentItem) -> str:
         ]
         if part.strip()
     )
+
+
+def _matched_query_terms(query_plan: PatentQueryPlan, patent: PatentItem) -> list[str]:
+    patent_text = _normalize_text(_patent_text(patent))
+    matched = []
+    for term in _coverage_terms(query_plan):
+        if _normalize_text(term) in patent_text:
+            matched.append(term)
+    return matched[:12]
+
+
+def _coverage_terms(query_plan: PatentQueryPlan) -> list[str]:
+    raw_terms = (
+        query_plan.technical_features
+        + query_plan.search_keywords
+        + query_plan.synonyms
+        + query_plan.kipris_queries
+    )
+    terms = []
+    for raw_term in raw_terms:
+        cleaned = " ".join(str(raw_term).strip().split())
+        if cleaned:
+            terms.append(cleaned)
+            terms.extend(cleaned.split())
+    return _dedupe_terms(terms)
+
+
+def _dedupe_terms(terms: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for term in terms:
+        key = _normalize_text(term)
+        if len(key) < 2 or key in seen or key in {"기술", "개선", "시스템", "방법", "관리"}:
+            continue
+        seen.add(key)
+        result.append(term)
+    return result
+
+
+def _normalize_text(value: str) -> str:
+    return "".join(str(value).lower().split())
 
 
 def _cosine_similarity(left: list[float], right: list[float]) -> float:

@@ -24,6 +24,9 @@ from app.models.patent import PatentItem
 
 logger = logging.getLogger(__name__)
 
+MIN_DIVERSE_SELECTION_SCORE = 0.48
+MIN_COVERAGE_TERMS_FOR_SELECTION = 2
+
 
 @dataclass
 class RerankEventItem:
@@ -32,6 +35,8 @@ class RerankEventItem:
     applicant_name: str
     score: float
     selected: bool
+    matched_terms: list[str]
+    selection_reason: str
 
     def to_event_data(self) -> dict:
         return {
@@ -40,6 +45,9 @@ class RerankEventItem:
             "applicantName": self.applicant_name,
             "score": round(self.score, 4),
             "selected": self.selected,
+            "matchedTerms": self.matched_terms,
+            "coverageCount": len(self.matched_terms),
+            "selectionReason": self.selection_reason,
         }
 
 
@@ -250,8 +258,9 @@ async def _search_sample_patents(
     strict_applicant = bool(query_plan and query_plan.applicant_candidates)
     candidate_limit = _candidate_limit(max_patents, query_plan)
     deferred_attempts: list[KiprisSearchAttempt] = []
+    min_attempts_before_break = _min_attempts_before_break(query_plan)
 
-    for attempt in attempts:
+    for attempt_index, attempt in enumerate(attempts, start=1):
         if strict_applicant and not attempt.applicant and patents_by_number:
             deferred_attempts.append(attempt)
             continue
@@ -271,7 +280,7 @@ async def _search_sample_patents(
             key = patent.application_number or patent.invention_title
             if key and key not in patents_by_number:
                 patents_by_number[key] = patent
-        if len(patents_by_number) >= candidate_limit:
+        if len(patents_by_number) >= candidate_limit and attempt_index >= min_attempts_before_break:
             break
 
     if not patents_by_number and settings.auto_ingest_fallback_applicant:
@@ -302,7 +311,11 @@ async def _search_sample_patents(
         top_k=_candidate_limit(max_patents, query_plan),
         min_score=0.0,
     )
-    ranked = [item for item in ranked_all if item.score >= min_rerank_score][:max_patents]
+    ranked = _select_auto_ingest_patents(
+        ranked_all,
+        max_patents=max_patents,
+        min_score=min_rerank_score,
+    )
     if not ranked and deferred_attempts:
         fallback_candidates, fallback_calls = await _collect_from_attempts(
             deferred_attempts,
@@ -316,8 +329,13 @@ async def _search_sample_patents(
             top_k=_candidate_limit(max_patents, query_plan),
             min_score=0.0,
         )
-        ranked = [item for item in ranked_all if item.score >= min_rerank_score][:max_patents]
+        ranked = _select_auto_ingest_patents(
+            ranked_all,
+            max_patents=max_patents,
+            min_score=min_rerank_score,
+        )
     selected_numbers = {item.patent.application_number for item in ranked}
+    selected_signatures = {_coverage_signature(item) for item in ranked}
     return PatentSelectionResult(
         patents=[item.patent for item in ranked],
         calls_used=calls_used,
@@ -328,11 +346,86 @@ async def _search_sample_patents(
                 applicant_name=item.patent.applicant_name,
                 score=item.score,
                 selected=item.patent.application_number in selected_numbers,
+                matched_terms=item.matched_terms,
+                selection_reason=_selection_reason(
+                    item,
+                    min_rerank_score,
+                    selected=item.patent.application_number in selected_numbers,
+                    selected_signatures=selected_signatures,
+                ),
             )
             for item in ranked_all[:10]
         ],
         min_score=min_rerank_score,
     )
+
+
+def _select_auto_ingest_patents(
+    ranked_items,
+    *,
+    max_patents: int,
+    min_score: float,
+):
+    eligible = [
+        item
+        for item in ranked_items
+        if _is_auto_ingest_candidate(item, min_score)
+    ]
+    selected = []
+    seen_signatures = set()
+    for item in eligible:
+        signature = _coverage_signature(item)
+        if signature in seen_signatures:
+            continue
+        selected.append(item)
+        seen_signatures.add(signature)
+        if len(selected) >= max_patents:
+            return selected
+    if selected:
+        return selected
+
+    for item in eligible:
+        if item in selected:
+            continue
+        selected.append(item)
+        if len(selected) >= max_patents:
+            break
+    return selected
+
+
+def _is_auto_ingest_candidate(item, min_score: float) -> bool:
+    if item.score >= min_score:
+        return True
+    return (
+        item.score >= MIN_DIVERSE_SELECTION_SCORE
+        and item.coverage_count >= MIN_COVERAGE_TERMS_FOR_SELECTION
+    )
+
+
+def _coverage_signature(item) -> tuple[str, ...]:
+    atomic_terms = [term for term in item.matched_terms if " " not in term.strip()]
+    terms = sorted(atomic_terms or item.matched_terms)[:4] if item.matched_terms else ["score_only"]
+    return tuple(_normalize_query(term) for term in terms)
+
+
+def _selection_reason(
+    item,
+    min_score: float,
+    *,
+    selected: bool = False,
+    selected_signatures: set[tuple[str, ...]] | None = None,
+) -> str:
+    if item.score >= min_score:
+        return "score_cutoff"
+    if _is_auto_ingest_candidate(item, min_score):
+        if not selected and selected_signatures and _coverage_signature(item) in selected_signatures:
+            return "duplicate_coverage"
+        return "coverage_fallback"
+    if item.coverage_count == 0:
+        return "no_feature_coverage"
+    if item.score < MIN_DIVERSE_SELECTION_SCORE:
+        return "score_below_floor"
+    return "coverage_below_threshold"
 
 
 async def _collect_from_attempts(
@@ -365,6 +458,12 @@ def _candidate_limit(max_patents: int, query_plan: PatentQueryPlan | None) -> in
     return max(max_patents * 5, 10)
 
 
+def _min_attempts_before_break(query_plan: PatentQueryPlan | None) -> int:
+    if query_plan is None:
+        return 1
+    return max(1, min(len(query_plan.kipris_queries), settings.auto_ingest_search_attempts))
+
+
 def _filter_by_applicant(patents: list[PatentItem], applicant: str | None) -> list[PatentItem]:
     if not applicant:
         return patents
@@ -388,10 +487,14 @@ def _build_search_attempts(query: str, query_plan: PatentQueryPlan | None):
     keywords = query_plan.kipris_queries[: settings.auto_ingest_search_attempts]
     for applicant in applicants:
         for keyword in keywords:
+            attempts.append(("keyword", keyword, applicant))
             attempts.append(("invention_title", keyword, applicant))
             attempts.append(("abstract", keyword, applicant))
     for keyword in query_plan.kipris_queries[: settings.auto_ingest_search_attempts]:
+        attempts.append(("keyword", keyword, None))
+    for keyword in query_plan.kipris_queries[: settings.auto_ingest_search_attempts]:
         attempts.append(("invention_title", keyword, None))
+    for keyword in query_plan.kipris_queries[: settings.auto_ingest_search_attempts]:
         attempts.append(("abstract", keyword, None))
     for keyword in query_plan.search_keywords[:2]:
         attempts.append(("invention_title", keyword, None))
