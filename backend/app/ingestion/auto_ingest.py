@@ -33,6 +33,10 @@ class RerankEventItem:
     application_number: str
     title: str
     applicant_name: str
+    ipc_number: str
+    application_date: str
+    register_status: str
+    abstract: str
     score: float
     selected: bool
     matched_terms: list[str]
@@ -43,6 +47,10 @@ class RerankEventItem:
             "applicationNumber": self.application_number,
             "title": self.title,
             "applicantName": self.applicant_name,
+            "ipcNumber": self.ipc_number,
+            "applicationDate": self.application_date,
+            "registerStatus": self.register_status,
+            "abstract": self.abstract,
             "score": round(self.score, 4),
             "selected": self.selected,
             "matchedTerms": self.matched_terms,
@@ -344,6 +352,10 @@ async def _search_sample_patents(
                 application_number=item.patent.application_number,
                 title=item.patent.invention_title,
                 applicant_name=item.patent.applicant_name,
+                ipc_number=item.patent.ipc_number,
+                application_date=item.patent.application_date,
+                register_status=item.patent.register_status,
+                abstract=item.patent.abstract,
                 score=item.score,
                 selected=item.patent.application_number in selected_numbers,
                 matched_terms=item.matched_terms,
