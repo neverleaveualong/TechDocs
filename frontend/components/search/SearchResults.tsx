@@ -15,7 +15,7 @@ export default function SearchResults({ sources }: SearchResultsProps) {
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <i className="ri-file-text-line text-gray-400" />
-          <h3 className="text-sm font-bold text-gray-900">출처 특허</h3>
+          <h3 className="text-sm font-bold text-gray-900">답변에 사용된 출처</h3>
           <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-teal-50 text-teal-700 border border-teal-100 rounded">
             {sources.length}건
           </span>

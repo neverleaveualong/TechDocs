@@ -481,18 +481,40 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
   const data = getAutoIngestData(events);
   const quality = getSearchQualityData(events);
   const candidates = Array.isArray(data.rerankCandidates) ? data.rerankCandidates : [];
+  const selectedCandidates = candidates.filter((candidate) => asRecord(candidate).selected === true);
+  const filteredCandidates = candidates.filter((candidate) => asRecord(candidate).selected !== true);
   const matchedTerms = Array.isArray(quality.matchedTerms) ? quality.matchedTerms : [];
   const hasQuality = typeof quality.reason === "string" && quality.reason.length > 0;
+  const sourceCount = getLatestSourceCount(events);
+  const hasIngestResult = typeof data.status === "string" && data.status.length > 0;
   if (!data.status && candidates.length === 0 && !hasQuality) {
     return null;
   }
 
   return (
-    <SmallPanel title="검색 품질 / 자동 수집" count={candidates.length}>
+    <SmallPanel title="검색 품질과 자동 수집" count={candidates.length}>
+      {hasIngestResult && (
+        <div className="rounded-lg border border-teal-100 bg-teal-50/70 p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-bold text-teal-900">{getAutoIngestStatusLabel(data.status)}</p>
+              <p className="mt-1 text-[11px] leading-5 text-teal-700">
+                {getAutoIngestSummary(data, candidates.length, selectedCandidates.length, sourceCount)}
+              </p>
+            </div>
+            <span className="shrink-0 rounded border border-teal-200 bg-white px-2 py-1 font-mono text-[10px] font-semibold text-teal-700">
+              cutoff {formatScore(data.rerankMinScore)}
+            </span>
+          </div>
+          {typeof data.message === "string" && data.message.length > 0 && (
+            <p className="mt-2 text-[11px] leading-5 text-teal-700">{data.message}</p>
+          )}
+        </div>
+      )}
       {hasQuality && (
         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-bold text-gray-800">{String(quality.reason)}</span>
+            <span className="text-xs font-bold text-gray-800">현재 검색 품질: {String(quality.reason)}</span>
             <span className="font-mono text-[11px] text-gray-500">
               best {formatScore(quality.bestScore)}
             </span>
@@ -508,7 +530,7 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
                   : "bg-teal-50 text-teal-700 border-teal-100"
               }`}
             >
-              {quality.shouldAutoIngest === true ? "auto ingest needed" : "enough sources"}
+              {quality.shouldAutoIngest === true ? "자동 수집 필요" : "근거 충분"}
             </span>
           </div>
           {matchedTerms.length > 0 && (
@@ -518,64 +540,89 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
           )}
         </div>
       )}
-      <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-bold text-gray-800">{String(data.status ?? "-")}</span>
-          <span className="font-mono text-[11px] text-teal-700">
-            cutoff {formatScore(data.rerankMinScore)}
-          </span>
-        </div>
-        {typeof data.message === "string" && data.message.length > 0 && (
-          <p className="mt-2 text-[11px] leading-5 text-gray-500">{data.message}</p>
-        )}
+      {selectedCandidates.length > 0 && (
+        <CandidateGroup title="이번에 Pinecone에 저장된 특허" candidates={selectedCandidates} tone="selected" />
+      )}
+      {filteredCandidates.length > 0 && (
+        <CandidateGroup title="후보였지만 저장하지 않은 특허" candidates={filteredCandidates.slice(0, 5)} tone="filtered" />
+      )}
+    </SmallPanel>
+  );
+}
+
+function CandidateGroup({
+  title,
+  candidates,
+  tone,
+}: {
+  title: string;
+  candidates: unknown[];
+  tone: "selected" | "filtered";
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[11px] font-bold text-gray-700">{title}</p>
+        <span className="text-[10px] font-semibold text-gray-400">{candidates.length}건</span>
       </div>
-      {candidates.slice(0, 5).map((candidate, index) => {
+      {candidates.map((candidate, index) => {
         const item = asRecord(candidate);
-        const selected = item.selected === true;
         return (
-          <div
+          <CandidateSummaryCard
             key={`${String(item.applicationNumber ?? index)}-${index}`}
-            className={`rounded-lg border p-3 ${
-              selected ? "border-teal-100 bg-teal-50/70" : "border-gray-100 bg-gray-50"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold leading-5 text-gray-900">
-                {String(item.title ?? "제목 없음")}
-              </p>
-              <span className={`font-mono text-[11px] ${selected ? "text-teal-700" : "text-gray-500"}`}>
-                {formatScore(item.score)}
-              </span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="font-mono text-[10px] text-gray-400">
-                {String(item.applicationNumber ?? "-")}
-              </span>
-              <span className={`text-[10px] font-bold ${selected ? "text-teal-700" : "text-gray-400"}`}>
-                {selected ? "selected" : "filtered"}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {typeof item.selectionReason === "string" && (
-                <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
-                  {item.selectionReason}
-                </span>
-              )}
-              {typeof item.coverageCount === "number" && (
-                <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
-                  coverage {String(item.coverageCount)}
-                </span>
-              )}
-            </div>
-            {Array.isArray(item.matchedTerms) && item.matchedTerms.length > 0 && (
-              <p className="mt-2 text-[11px] leading-5 text-gray-500">
-                matched: {item.matchedTerms.slice(0, 5).map(String).join(", ")}
-              </p>
-            )}
-          </div>
+            item={item}
+            tone={tone}
+          />
         );
       })}
-    </SmallPanel>
+    </div>
+  );
+}
+
+function CandidateSummaryCard({
+  item,
+  tone,
+}: {
+  item: Record<string, unknown>;
+  tone: "selected" | "filtered";
+}) {
+  const selected = tone === "selected";
+  return (
+    <div className={`rounded-lg border p-3 ${selected ? "border-teal-100 bg-teal-50/70" : "border-gray-100 bg-gray-50"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-semibold leading-5 text-gray-900">
+          {String(item.title ?? "제목 없음")}
+        </p>
+        <span className={`font-mono text-[11px] ${selected ? "text-teal-700" : "text-gray-500"}`}>
+          {formatScore(item.score)}
+        </span>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="font-mono text-[10px] text-gray-400">
+          {String(item.applicationNumber ?? "-")}
+        </span>
+        <span className={`text-[10px] font-bold ${selected ? "text-teal-700" : "text-gray-400"}`}>
+          {selected ? "저장됨" : "제외됨"}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {typeof item.selectionReason === "string" && (
+          <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+            {item.selectionReason}
+          </span>
+        )}
+        {typeof item.coverageCount === "number" && (
+          <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+            coverage {String(item.coverageCount)}
+          </span>
+        )}
+      </div>
+      {Array.isArray(item.matchedTerms) && item.matchedTerms.length > 0 && (
+        <p className="mt-2 text-[11px] leading-5 text-gray-500">
+          matched: {item.matchedTerms.slice(0, 5).map(String).join(", ")}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -771,6 +818,52 @@ function getSearchQualityData(events: Array<ClaimLensEvent | SearchStreamEvent>)
     return {};
   }
   return asRecord(event.data);
+}
+
+function getLatestSourceCount(events: Array<ClaimLensEvent | SearchStreamEvent>) {
+  const event = events.findLast((item) => item.type === "sources");
+  return event && "sources" in event && Array.isArray(event.sources) ? event.sources.length : null;
+}
+
+function getAutoIngestStatusLabel(status: unknown) {
+  switch (status) {
+    case "success":
+      return "자동 수집 완료";
+    case "cached":
+      return "캐시된 자동 수집 결과 사용";
+    case "low_relevance":
+      return "관련 후보 부족";
+    case "no_data":
+      return "수집할 후보 없음";
+    case "budget_exceeded":
+      return "자동 수집 한도 도달";
+    case "disabled":
+      return "자동 수집 비활성화";
+    case "error":
+      return "자동 수집 실패";
+    default:
+      return `자동 수집 상태: ${String(status ?? "-")}`;
+  }
+}
+
+function getAutoIngestSummary(
+  data: Record<string, unknown>,
+  candidateCount: number,
+  selectedCount: number,
+  sourceCount: number | null,
+) {
+  const savedCount = data.patentsSaved ?? data.claimlensPatentsSaved ?? selectedCount;
+  const sourceSummary = sourceCount !== null ? ` 답변 근거로는 ${sourceCount}건을 사용했습니다.` : "";
+
+  if (data.status === "cached") {
+    return `최근 같은 검색어의 자동 수집 기록을 재사용했습니다.${sourceSummary}`;
+  }
+
+  if (candidateCount > 0) {
+    return `KIPRIS 후보 ${candidateCount}건 중 ${String(savedCount)}건을 Pinecone에 저장했습니다.${sourceSummary}`;
+  }
+
+  return `Pinecone 저장 결과 ${String(savedCount)}건을 확인했습니다.${sourceSummary}`;
 }
 
 function formatScore(value: unknown) {
