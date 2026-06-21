@@ -8,7 +8,7 @@ from app.config import settings
 from app.core.patent_query_agent import build_patent_query_plan
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
-from app.core.search_quality import evaluate_search_quality
+from app.core.search_quality import evaluate_search_quality, filter_relevant_documents
 from app.db.database import SessionLocal
 from app.ingestion.auto_ingest import maybe_auto_ingest_for_rag
 from app.models.feedback import QueryLog
@@ -50,13 +50,17 @@ def _encode_stream_event(payload: dict) -> bytes:
     return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
 
 
-def _prepare_rag_search(body: SearchRequest, retrieval_query: str) -> dict:
+def _prepare_rag_search(body: SearchRequest, retrieval_query: str, query_plan=None) -> dict:
+    document_filter = None
+    if query_plan is not None:
+        document_filter = lambda documents: filter_relevant_documents(documents, query_plan)
     return rag_pipeline.prepare_search(
         query=retrieval_query,
         top_k=body.top_k,
         namespace=settings.rag_namespace,
         use_hybrid=body.use_hybrid,
         use_reranker=body.use_reranker,
+        document_filter=document_filter,
     )
 
 
@@ -67,12 +71,12 @@ async def search(request: Request, body: SearchRequest):
     try:
         query_plan = build_patent_query_plan(body.query, intent_hint="rag_search")
         retrieval_query = body.query
-        prepared = _prepare_rag_search(body, retrieval_query)
+        prepared = _prepare_rag_search(body, retrieval_query, query_plan)
         quality = evaluate_search_quality(prepared["sources"], query_plan)
         if body.auto_ingest and quality.should_auto_ingest:
             auto_ingest_result = await maybe_auto_ingest_for_rag(body.query, query_plan=query_plan)
             if auto_ingest_result.should_retry_search:
-                prepared = _prepare_rag_search(body, retrieval_query)
+                prepared = _prepare_rag_search(body, retrieval_query, query_plan)
                 quality = evaluate_search_quality(prepared["sources"], query_plan)
             if quality.should_auto_ingest:
                 prepared = rag_pipeline.prepare_empty_search(retrieval_query)
@@ -112,7 +116,7 @@ async def search_stream(request: Request, body: SearchRequest):
                 }
             )
             retrieval_query = body.query
-            prepared = _prepare_rag_search(body, retrieval_query)
+            prepared = _prepare_rag_search(body, retrieval_query, query_plan)
             quality = evaluate_search_quality(prepared["sources"], query_plan)
             yield _encode_stream_event(
                 {
@@ -143,7 +147,7 @@ async def search_stream(request: Request, body: SearchRequest):
                             "message": "수집한 샘플 데이터로 다시 검색합니다.",
                         }
                     )
-                    prepared = _prepare_rag_search(body, retrieval_query)
+                    prepared = _prepare_rag_search(body, retrieval_query, query_plan)
                     retry_quality = evaluate_search_quality(prepared["sources"], query_plan)
                     yield _encode_stream_event(
                         {

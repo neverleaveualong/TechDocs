@@ -20,6 +20,7 @@ class RAGPipeline:
         namespace: str = None,
         use_hybrid: bool = True,
         use_reranker: bool = False,
+        document_filter=None,
     ) -> dict:
         prepared = self.prepare_search(
             query=query,
@@ -27,6 +28,7 @@ class RAGPipeline:
             namespace=namespace,
             use_hybrid=use_hybrid,
             use_reranker=use_reranker,
+            document_filter=document_filter,
         )
         answer = self.llm.invoke(prepared["prompt_value"])
 
@@ -43,6 +45,7 @@ class RAGPipeline:
         namespace: str = None,
         use_hybrid: bool = True,
         use_reranker: bool = False,
+        document_filter=None,
     ) -> dict:
         """Retrieve supporting documents once so sync and streaming flows can share them."""
         if use_hybrid:
@@ -54,6 +57,9 @@ class RAGPipeline:
             )
         else:
             source_documents = self._vector_search(query, top_k=top_k, namespace=namespace)
+
+        if document_filter is not None:
+            source_documents = document_filter(source_documents)
 
         context_text = self._build_context(source_documents)
         prompt_value = SEARCH_PROMPT.invoke({"context": context_text, "question": query})
@@ -111,6 +117,8 @@ class RAGPipeline:
                     "register_status": doc.metadata.get("register_status", ""),
                     "score": doc.metadata.get("_retrieval_score"),
                     "score_type": doc.metadata.get("_retrieval_score_type", ""),
+                    "relevance_reason": doc.metadata.get("_source_relevance_reason", ""),
+                    "matched_terms": doc.metadata.get("_source_matched_terms", []),
                     "relevance_text": doc.page_content[:200],
                     "full_content": doc.page_content,
                 }

@@ -6,6 +6,8 @@ export interface PatentSource {
   register_status: string;
   score?: number | null;
   score_type?: string;
+  relevance_reason?: string;
+  matched_terms?: string[];
   relevance_text: string;
 }
 
