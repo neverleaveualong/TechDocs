@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PatentSource } from "@/types/search";
 
 interface PatentDetailModalProps {
@@ -29,6 +30,13 @@ function DetailItem({ label, value, mono = false }: { label: string; value?: str
 }
 
 export default function PatentDetailModal({ patent, onClose }: PatentDetailModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
   useEffect(() => {
     if (!patent) return;
 
@@ -45,25 +53,26 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
   }, [patent, onClose]);
 
   if (!patent) return null;
+  if (!mounted) return null;
 
   const matchedTerms = Array.isArray(patent.matched_terms) ? patent.matched_terms : [];
   const content = patent.full_content || patent.relevance_text || "상세 문서 내용이 없습니다.";
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-gray-950/55 px-3 py-3 backdrop-blur-sm sm:px-6 sm:py-5">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-3 backdrop-blur-sm sm:p-6">
       <button
         type="button"
         aria-label="상세 모달 닫기"
-        className="absolute inset-0 cursor-default"
+        className="fixed inset-0 cursor-default bg-transparent"
         onClick={onClose}
       />
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="patent-detail-title"
-        className="relative flex h-[calc(100dvh-24px)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_120px_rgba(15,23,42,0.32)] sm:h-[calc(100dvh-40px)]"
+        className="relative z-10 flex h-full max-h-[85vh] sm:max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.20)]"
       >
-        <div className="relative shrink-0 overflow-hidden border-b border-gray-200 bg-[linear-gradient(135deg,#f8fafc_0%,#ecfeff_48%,#fff7ed_100%)] px-5 py-4 sm:px-7 sm:py-5">
+        <div className="sticky top-0 z-10 shrink-0 border-b border-gray-200 bg-white px-5 py-4 sm:px-7 sm:py-5">
           <div className="relative flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -99,7 +108,7 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 p-4 sm:p-6">
+        <div className="flex-1 overflow-y-auto min-h-0 bg-gray-50 p-4 sm:p-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <DetailItem label="출원번호" value={patent.application_number} mono />
             <DetailItem label="출원일" value={formatDate(patent.application_date)} />
@@ -150,6 +159,7 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
           </div>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
