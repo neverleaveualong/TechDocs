@@ -8,108 +8,98 @@ interface PatentCardProps {
   onOpen?: (patent: PatentSource) => void;
 }
 
-function statusBadge(status: string) {
-  if (!status) return null;
-  const isRegistered = status === "등록";
-  return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-        isRegistered
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-gray-200 bg-gray-50 text-gray-500"
-      }`}
-    >
-      {status}
-    </span>
-  );
+function formatDate(value: string) {
+  if (!value || value.length < 8) return value || "-";
+  return `${value.slice(0, 4)}.${value.slice(4, 6)}.${value.slice(6, 8)}`;
 }
 
 function formatScore(score?: number | null) {
-  if (typeof score !== "number") return null;
+  if (typeof score !== "number") return "-";
   return score.toFixed(3);
 }
 
+function MetaRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value?: string | null;
+  mono?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-2 text-xs leading-5">
+      <span className="font-bold text-gray-400">{label}</span>
+      <span className={`break-words font-semibold text-gray-800 ${mono ? "font-mono" : ""}`}>
+        {value || "-"}
+      </span>
+    </div>
+  );
+}
+
 export default function PatentCard({ patent, index, onOpen }: PatentCardProps) {
-  const date = patent.application_date
-    ? `${patent.application_date.slice(0, 4)}.${patent.application_date.slice(4, 6)}.${patent.application_date.slice(6, 8)}`
-    : null;
-  const score = formatScore(patent.score);
-  const matchedTerms = Array.isArray(patent.matched_terms) ? patent.matched_terms.slice(0, 5) : [];
+  const matchedTerms = Array.isArray(patent.matched_terms) ? patent.matched_terms.slice(0, 8) : [];
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen?.(patent)}
-      className="group relative flex w-full gap-4 overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-[0_18px_50px_rgba(15,118,110,0.14)] focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
-    >
-      <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-teal-400 via-blue-500 to-amber-400 opacity-80" />
-      {typeof index === "number" && (
-        <div className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[12px] font-black text-gray-500 transition-colors group-hover:border-teal-200 group-hover:bg-teal-50 group-hover:text-teal-700">
-          {index + 1}
-        </div>
-      )}
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-              {statusBadge(patent.register_status)}
-              {score && (
-                <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
-                  관련도 {score}
-                </span>
-              )}
-              {patent.score_type && (
-                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                  {patent.score_type}
-                </span>
-              )}
-            </div>
-            <h4 className="line-clamp-2 text-[14px] font-bold leading-5 text-gray-950 transition-colors group-hover:text-teal-800">
-              {patent.invention_title || "제목 없음"}
-            </h4>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:shadow-[0_12px_34px_rgba(15,23,42,0.08)]">
+      <div className="flex items-start gap-3">
+        {typeof index === "number" && (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-xs font-black text-gray-500">
+            {index + 1}
           </div>
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-400 transition-all group-hover:border-teal-200 group-hover:bg-teal-50 group-hover:text-teal-700">
-            <i className="ri-arrow-right-up-line text-sm" />
-          </span>
-        </div>
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <i className="ri-building-4-line text-[12px] text-gray-400" />
-            <span className="truncate font-semibold text-gray-700">{patent.applicant_name || "-"}</span>
-          </span>
-          <span className="flex items-center gap-1.5 font-mono text-gray-500">
-            <i className="ri-hashtag text-[12px] text-gray-400" />
-            {patent.application_number}
-          </span>
-          {date && (
-            <span className="flex items-center gap-1.5 text-gray-500">
-              <i className="ri-calendar-line text-[12px] text-gray-400" />
-              {date}
-            </span>
-          )}
-        </div>
-
-        {patent.relevance_text && (
-          <p className="mt-3 line-clamp-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] leading-5 text-gray-600">
-            {patent.relevance_text}
-          </p>
         )}
 
-        {matchedTerms.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <MetaRow label="특허명" value={patent.invention_title || "제목 없음"} />
+          <MetaRow label="출원날짜" value={formatDate(patent.application_date)} />
+          <MetaRow label="출원인명" value={patent.applicant_name} />
+          <MetaRow label="출원번호" value={patent.application_number} mono />
+        </div>
+
+        <div className="shrink-0 rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-2.5 text-center shadow-sm">
+          <p className="font-mono text-2xl font-black leading-none text-blue-900">{formatScore(patent.score)}</p>
+          <p className="mt-1 text-[11px] font-extrabold text-blue-700 tracking-wide">관련도</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-gray-100 pt-3">
+        <span className="rounded-full border border-teal-100 bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-700">
+          관련도 기준 통과
+        </span>
+        <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+          키워드 매칭 {matchedTerms.length}개
+        </span>
+        {patent.register_status && (
+          <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+            {patent.register_status}
+          </span>
+        )}
+      </div>
+
+      {matchedTerms.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[11px] font-bold text-gray-400">매칭 키워드</p>
+          <div className="flex flex-wrap gap-1.5">
             {matchedTerms.map((term) => (
               <span
                 key={term}
-                className="rounded-full border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-semibold text-teal-700"
+                className="rounded-full border border-teal-100 bg-white px-2 py-1 text-[11px] font-semibold text-teal-700"
               >
                 {term}
               </span>
             ))}
           </div>
-        )}
-      </div>
-    </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onOpen?.(patent)}
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-950 px-3 py-2.5 text-xs font-black text-white transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
+      >
+        <i className="ri-file-search-line" />
+        특허내용 보기
+      </button>
+    </div>
   );
 }
