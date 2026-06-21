@@ -6,6 +6,7 @@ import SearchBar from "@/components/search/SearchBar";
 import AiAnswer from "@/components/search/AiAnswer";
 import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
+import PatentDetailModal from "@/components/patent/PatentDetailModal";
 import { searchPatents, searchPatentsStream, streamClaimLensAnalysis } from "@/lib/api";
 import type { ClaimLensEvent } from "@/types/claimlens";
 import type { PatentSource, SearchStreamEvent } from "@/types/search";
@@ -155,6 +156,8 @@ export default function SearchPage() {
   const chartRows = claimLensEvents.filter((event) => event.type === "claim_chart_row");
   const features = getToolResultArray(claimLensEvents, "extract_product_features", "features");
   const candidates = getToolResultArray(claimLensEvents, "search_claim_candidates", "candidates");
+  const hasRagActivity = mode === "rag" && Boolean(activeQuery) && (isLoading || isStreaming || ragEvents.length > 0 || streamedAnswer || streamedSources.length > 0);
+  const hasClaimLensActivity = mode === "claimlens" && Boolean(activeQuery) && (isLoading || claimLensEvents.length > 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -217,7 +220,7 @@ export default function SearchPage() {
             }
           />
 
-          {!streamedAnswer && streamedSources.length === 0 && claimLensEvents.length === 0 && !isLoading && (
+          {!streamedAnswer && streamedSources.length === 0 && claimLensEvents.length === 0 && !isLoading && !hasRagActivity && !hasClaimLensActivity && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
               <span className="text-[11px] text-gray-400 font-medium leading-7">
                 {mode === "rag" ? "추천 검색어" : "검토 예시"}
@@ -237,8 +240,8 @@ export default function SearchPage() {
         </div>
 
         <div className="mt-6">
-          {isLoading && mode === "rag" && (
-            <LoadingSpinner message="특허를 검색하는 중입니다..." />
+          {isLoading && mode === "rag" && ragEvents.length === 0 && (
+            <LoadingSpinner message="특허 후보를 찾는 중입니다..." />
           )}
 
           {error && (
@@ -251,14 +254,19 @@ export default function SearchPage() {
             </div>
           )}
 
-          {mode === "rag" && (streamedAnswer || streamedSources.length > 0) && (
+          {mode === "rag" && hasRagActivity && (
             <div className="space-y-4 animate-fade-in">
-              <AiAnswer 
-                answer={streamedAnswer} 
-                query={activeQuery} 
-                queryLogId={queryLogId}
-                isStreaming={isStreaming}
-              />
+              {!streamedAnswer && streamedSources.length === 0 && ragEvents.length > 0 && (
+                <SearchProgressPanel events={ragEvents} />
+              )}
+              {(streamedAnswer || streamedSources.length > 0 || isStreaming) && (
+                <AiAnswer 
+                  answer={streamedAnswer} 
+                  query={activeQuery} 
+                  queryLogId={queryLogId}
+                  isStreaming={isStreaming}
+                />
+              )}
               <SearchResults sources={streamedSources} />
               <AutoIngestDebugPanel events={ragEvents} />
               <ResetButton onClick={() => {
@@ -288,7 +296,7 @@ export default function SearchPage() {
           )}
         </div>
 
-        {!streamedAnswer && streamedSources.length === 0 && claimLensEvents.length === 0 && !isLoading && !error && (
+        {!hasRagActivity && !hasClaimLensActivity && !error && (
           <EmptyState mode={mode} />
         )}
       </main>
@@ -477,7 +485,34 @@ function StepPill({ state }: { state: "done" | "running" | "waiting" }) {
   return <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${klass}`}>{label}</span>;
 }
 
+function SearchProgressPanel({ events }: { events: SearchStreamEvent[] }) {
+  const latestType = events.at(-1)?.type;
+  const message =
+    latestType === "auto_ingest_started"
+      ? "기존 데이터가 부족해 KIPRIS에서 관련 특허를 보강하고 있습니다."
+      : latestType === "auto_ingest_completed"
+        ? "새로 찾은 특허를 저장하고 다시 검색하고 있습니다."
+        : latestType === "retry_search"
+          ? "보강된 특허 데이터로 답변 근거를 다시 고르는 중입니다."
+          : "질문을 분석하고 관련 특허 후보를 찾는 중입니다.";
+
+  return (
+    <div className="rounded-3xl border border-teal-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0fdfa_55%,#fff7ed_100%)] p-5 shadow-sm">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-teal-100 bg-white text-teal-700 shadow-sm">
+          <i className="ri-loader-4-line animate-spin text-lg" />
+        </span>
+        <div>
+          <p className="text-sm font-black text-gray-950">검색 결과를 준비하고 있습니다</p>
+          <p className="mt-1 text-xs font-medium leading-5 text-gray-600">{message}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | SearchStreamEvent> }) {
+  const [selectedPatent, setSelectedPatent] = useState<PatentSource | null>(null);
   const data = getAutoIngestData(events);
   const quality = getSearchQualityData(events);
   const candidates = Array.isArray(data.rerankCandidates) ? data.rerankCandidates : [];
@@ -494,34 +529,41 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
   return (
     <SmallPanel title="검색 품질과 자동 수집" count={candidates.length}>
       {hasIngestResult && (
-        <div className="rounded-lg border border-teal-100 bg-teal-50/70 p-3">
+        <div className="overflow-hidden rounded-2xl border border-teal-100 bg-[linear-gradient(135deg,#f0fdfa_0%,#eff6ff_55%,#fff7ed_100%)] p-4 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-bold text-teal-900">{getAutoIngestStatusLabel(data.status)}</p>
-              <p className="mt-1 text-[11px] leading-5 text-teal-700">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-black text-gray-950">
+                <i className="ri-database-2-line text-teal-700" />
+                {getAutoIngestStatusLabel(data.status)}
+              </p>
+              <p className="mt-1 text-[12px] font-medium leading-5 text-gray-700">
                 {getAutoIngestSummary(data, candidates.length, selectedCandidates.length, sourceCount)}
               </p>
             </div>
-            <span className="shrink-0 rounded border border-teal-200 bg-white px-2 py-1 font-mono text-[10px] font-semibold text-teal-700">
-              cutoff {formatScore(data.rerankMinScore)}
-            </span>
+            {typeof data.rerankMinScore === "number" && (
+              <span className="shrink-0 rounded-full border border-teal-200 bg-white/90 px-3 py-1 text-[10px] font-bold text-teal-700 shadow-sm">
+                저장 기준 {formatScore(data.rerankMinScore)}
+              </span>
+            )}
           </div>
           {typeof data.message === "string" && data.message.length > 0 && (
-            <p className="mt-2 text-[11px] leading-5 text-teal-700">{data.message}</p>
+            <p className="mt-3 rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-[11px] font-medium leading-5 text-gray-600">
+              {data.message}
+            </p>
           )}
         </div>
       )}
       {hasQuality && (
-        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-bold text-gray-800">현재 검색 품질: {String(quality.reason)}</span>
+            <span className="text-xs font-bold text-gray-800">검색 상태: {getSearchQualityLabel(quality.reason)}</span>
             <span className="font-mono text-[11px] text-gray-500">
-              best {formatScore(quality.bestScore)}
+              최고 관련도 {formatScore(quality.bestScore)}
             </span>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
-              sources {String(quality.sourceCount ?? 0)}
+              근거 후보 {String(quality.sourceCount ?? 0)}건
             </span>
             <span
               className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
@@ -530,22 +572,35 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
                   : "bg-teal-50 text-teal-700 border-teal-100"
               }`}
             >
-              {quality.shouldAutoIngest === true ? "자동 수집 필요" : "근거 충분"}
+              {getQualityActionLabel(quality.shouldAutoIngest, data.status)}
             </span>
           </div>
           {matchedTerms.length > 0 && (
             <p className="mt-2 text-[11px] leading-5 text-gray-500">
-              matched: {matchedTerms.slice(0, 6).map(String).join(", ")}
+              매칭 키워드: {matchedTerms.slice(0, 6).map(String).join(", ")}
             </p>
           )}
         </div>
       )}
-      {selectedCandidates.length > 0 && (
-        <CandidateGroup title="이번에 Pinecone에 저장된 특허" candidates={selectedCandidates} tone="selected" />
-      )}
-      {filteredCandidates.length > 0 && (
-        <CandidateGroup title="후보였지만 저장하지 않은 특허" candidates={filteredCandidates.slice(0, 5)} tone="filtered" />
-      )}
+      <div className="space-y-3">
+        {selectedCandidates.length > 0 && (
+          <CandidateGroup
+            title="이번에 Pinecone에 저장된 특허"
+            candidates={selectedCandidates}
+            tone="selected"
+            onOpen={setSelectedPatent}
+          />
+        )}
+        {filteredCandidates.length > 0 && (
+          <CandidateGroup
+            title="후보였지만 저장하지 않은 특허"
+            candidates={filteredCandidates.slice(0, 5)}
+            tone="filtered"
+            onOpen={setSelectedPatent}
+          />
+        )}
+      </div>
+      <PatentDetailModal patent={selectedPatent} onClose={() => setSelectedPatent(null)} />
     </SmallPanel>
   );
 }
@@ -554,16 +609,30 @@ function CandidateGroup({
   title,
   candidates,
   tone,
+  onOpen,
 }: {
   title: string;
   candidates: unknown[];
   tone: "selected" | "filtered";
+  onOpen: (patent: PatentSource) => void;
 }) {
+  const selected = tone === "selected";
   return (
-    <div className="space-y-2">
+    <div
+      className={`space-y-2 rounded-3xl border p-3 ${
+        selected
+          ? "border-teal-200 bg-teal-50/50 shadow-[0_14px_40px_rgba(15,118,110,0.10)]"
+          : "border-amber-200 bg-amber-50/50 shadow-[0_14px_40px_rgba(180,83,9,0.08)]"
+      }`}
+    >
       <div className="flex items-center justify-between px-1">
-        <p className="text-[11px] font-bold text-gray-700">{title}</p>
-        <span className="text-[10px] font-semibold text-gray-400">{candidates.length}건</span>
+        <p className={`flex items-center gap-1.5 text-xs font-black ${selected ? "text-teal-900" : "text-amber-900"}`}>
+          <i className={selected ? "ri-checkbox-circle-line text-teal-600" : "ri-filter-3-line text-amber-600"} />
+          {title}
+        </p>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${selected ? "bg-teal-100 text-teal-800" : "bg-amber-100 text-amber-800"}`}>
+          {candidates.length}건
+        </span>
       </div>
       {candidates.map((candidate, index) => {
         const item = asRecord(candidate);
@@ -572,6 +641,7 @@ function CandidateGroup({
             key={`${String(item.applicationNumber ?? index)}-${index}`}
             item={item}
             tone={tone}
+            onOpen={onOpen}
           />
         );
       })}
@@ -582,47 +652,70 @@ function CandidateGroup({
 function CandidateSummaryCard({
   item,
   tone,
+  onOpen,
 }: {
   item: Record<string, unknown>;
   tone: "selected" | "filtered";
+  onOpen: (patent: PatentSource) => void;
 }) {
   const selected = tone === "selected";
+  const patent = candidateToPatentSource(item);
   return (
-    <div className={`rounded-lg border p-3 ${selected ? "border-teal-100 bg-teal-50/70" : "border-gray-100 bg-gray-50"}`}>
+    <button
+      type="button"
+      onClick={() => onOpen(patent)}
+      className={`group w-full rounded-2xl border p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+        selected
+          ? "border-teal-200 bg-white hover:border-teal-300 hover:shadow-[0_16px_42px_rgba(15,118,110,0.16)] focus:ring-teal-400"
+          : "border-amber-200 bg-white/85 hover:border-amber-300 hover:shadow-[0_16px_42px_rgba(180,83,9,0.14)] focus:ring-amber-400"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-semibold leading-5 text-gray-900">
+        <p className="text-xs font-bold leading-5 text-gray-950 group-hover:underline">
           {String(item.title ?? "제목 없음")}
         </p>
-        <span className={`font-mono text-[11px] ${selected ? "text-teal-700" : "text-gray-500"}`}>
-          {formatScore(item.score)}
-        </span>
+        <div className={`shrink-0 rounded-2xl border px-3.5 py-2.5 text-right ${selected ? "border-teal-100 bg-teal-50" : "border-amber-100 bg-amber-50"}`}>
+          <p className={`font-mono text-xl font-black leading-none ${selected ? "text-teal-800" : "text-amber-800"}`}>
+            {formatScore(item.score)}
+          </p>
+          <p className={`mt-0.5 text-[9px] font-bold ${selected ? "text-teal-600" : "text-amber-600"}`}>
+            관련도
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+        <p className="text-[10px] font-bold text-gray-400">출원번호</p>
+        <p className="mt-0.5 break-all font-mono text-xs font-black text-gray-800">
+          {String(item.applicationNumber ?? "-")}
+        </p>
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="font-mono text-[10px] text-gray-400">
-          {String(item.applicationNumber ?? "-")}
-        </span>
-        <span className={`text-[10px] font-bold ${selected ? "text-teal-700" : "text-gray-400"}`}>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${selected ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"}`}>
           {selected ? "저장됨" : "제외됨"}
         </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {typeof item.selectionReason === "string" && (
           <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
-            {item.selectionReason}
+            {getSelectionReasonLabel(item.selectionReason)}
           </span>
         )}
         {typeof item.coverageCount === "number" && (
           <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
-            coverage {String(item.coverageCount)}
+            키워드 매칭 {String(item.coverageCount)}개
           </span>
         )}
       </div>
       {Array.isArray(item.matchedTerms) && item.matchedTerms.length > 0 && (
         <p className="mt-2 text-[11px] leading-5 text-gray-500">
-          matched: {item.matchedTerms.slice(0, 5).map(String).join(", ")}
+          매칭: {item.matchedTerms.slice(0, 5).map(String).join(", ")}
         </p>
       )}
-    </div>
+      <div className={`mt-3 flex items-center gap-1 text-[10px] font-bold ${selected ? "text-teal-700" : "text-amber-700"}`}>
+        <i className="ri-eye-line" />
+        특허 내용 보기
+      </div>
+    </button>
   );
 }
 
@@ -855,6 +948,26 @@ function getAutoIngestSummary(
   const savedCount = data.patentsSaved ?? data.claimlensPatentsSaved ?? selectedCount;
   const sourceSummary = sourceCount !== null ? ` 답변 근거로는 ${sourceCount}건을 사용했습니다.` : "";
 
+  if (data.status === "budget_exceeded") {
+    return "오늘 자동 수집 한도에 도달해 KIPRIS에서 새 특허를 가져오지 못했습니다. 더 구체적인 키워드로 다시 검색하거나 한도 초기화 후 재시도할 수 있습니다.";
+  }
+
+  if (data.status === "disabled") {
+    return "자동 수집이 꺼져 있어 저장된 특허 데이터 안에서만 검색했습니다.";
+  }
+
+  if (data.status === "low_relevance") {
+    return "KIPRIS 후보는 찾았지만 질문과 충분히 맞는 특허가 없어 Pinecone에 저장하지 않았습니다.";
+  }
+
+  if (data.status === "no_data") {
+    return "KIPRIS에서 이 질문에 맞는 후보 특허를 찾지 못했습니다.";
+  }
+
+  if (data.status === "error") {
+    return "자동 수집 중 오류가 발생해 새 특허를 저장하지 못했습니다.";
+  }
+
   if (data.status === "cached") {
     return `최근 같은 검색어의 자동 수집 기록을 재사용했습니다.${sourceSummary}`;
   }
@@ -863,7 +976,88 @@ function getAutoIngestSummary(
     return `KIPRIS 후보 ${candidateCount}건 중 ${String(savedCount)}건을 Pinecone에 저장했습니다.${sourceSummary}`;
   }
 
-  return `Pinecone 저장 결과 ${String(savedCount)}건을 확인했습니다.${sourceSummary}`;
+  return `Pinecone에 저장된 특허 ${String(savedCount)}건을 확인했습니다.${sourceSummary}`;
+}
+
+function getQualityActionLabel(shouldAutoIngest: unknown, ingestStatus: unknown) {
+  if (ingestStatus === "budget_exceeded") return "한도 때문에 보강 불가";
+  if (ingestStatus === "disabled") return "저장 데이터만 검색";
+  if (ingestStatus === "low_relevance") return "저장할 후보 없음";
+  if (ingestStatus === "no_data") return "후보 없음";
+  if (shouldAutoIngest === true) return "추가 수집 필요";
+  return "근거 충분";
+}
+
+function getSearchQualityLabel(reason: unknown) {
+  switch (reason) {
+    case "no_sources":
+      return "저장된 근거가 부족해 추가 검색이 필요합니다";
+    case "low_retrieval_score":
+      return "가장 가까운 특허의 관련도가 낮습니다";
+    case "no_query_term_overlap":
+      return "질문 키워드와 맞는 특허가 부족합니다";
+    case "weak_complex_query_match":
+      return "복합 질문을 뒷받침할 근거가 부족합니다";
+    case "enough_sources":
+      return "답변에 사용할 근거를 찾았습니다";
+    default:
+      return String(reason ?? "검색 상태 확인 중");
+  }
+}
+
+function getSelectionReasonLabel(reason: unknown) {
+  switch (reason) {
+    case "score_cutoff":
+      return "관련도 기준 통과";
+    case "coverage_fallback":
+      return "핵심 키워드가 충분히 겹침";
+    case "duplicate_coverage":
+      return "이미 비슷한 특허가 저장됨";
+    case "no_feature_coverage":
+      return "질문 키워드와 겹치지 않음";
+    case "score_below_floor":
+      return "관련도가 낮음";
+    case "coverage_below_threshold":
+      return "키워드 매칭이 부족함";
+    default:
+      return String(reason ?? "검토 결과 없음");
+  }
+}
+
+function candidateToPatentSource(item: Record<string, unknown>): PatentSource {
+  const matchedTerms = Array.isArray(item.matchedTerms) ? item.matchedTerms.map(String) : [];
+  const abstract = typeof item.abstract === "string" ? item.abstract : "";
+  const title = String(item.title ?? "");
+  const applicantName = String(item.applicantName ?? "");
+  const applicationNumber = String(item.applicationNumber ?? "");
+  const ipcNumber = String(item.ipcNumber ?? "");
+  const applicationDate = String(item.applicationDate ?? "");
+  const registerStatus = String(item.registerStatus ?? "");
+  const selectionReason = getSelectionReasonLabel(item.selectionReason);
+
+  return {
+    invention_title: title,
+    applicant_name: applicantName,
+    application_number: applicationNumber,
+    application_date: applicationDate,
+    register_status: registerStatus,
+    ipc_number: ipcNumber,
+    score: typeof item.score === "number" ? item.score : null,
+    score_type: "rerank",
+    relevance_reason: selectionReason,
+    matched_terms: matchedTerms,
+    relevance_text: abstract,
+    full_content: [
+      `발명의 명칭: ${title}`,
+      `출원번호: ${applicationNumber}`,
+      `출원인: ${applicantName}`,
+      `IPC: ${ipcNumber}`,
+      `출원일: ${applicationDate}`,
+      `등록상태: ${registerStatus}`,
+      "",
+      `초록: ${abstract || "초록 정보가 없습니다."}`,
+    ].join("\n"),
+  };
 }
 
 function formatScore(value: unknown) {

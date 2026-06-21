@@ -115,6 +115,7 @@ class RAGPipeline:
                     "application_number": app_num,
                     "application_date": doc.metadata.get("application_date", ""),
                     "register_status": doc.metadata.get("register_status", ""),
+                    "ipc_number": doc.metadata.get("ipc_number", ""),
                     "score": doc.metadata.get("_retrieval_score"),
                     "score_type": doc.metadata.get("_retrieval_score_type", ""),
                     "relevance_reason": doc.metadata.get("_source_relevance_reason", ""),

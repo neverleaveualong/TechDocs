@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     # Conservative on-demand ingest limits for portfolio demos.
     auto_ingest_enabled: bool = True
     auto_ingest_fallback_applicant: str = "삼성전자"
-    auto_ingest_max_daily_calls: int = 20
-    auto_ingest_max_monthly_calls: int = 300
+    auto_ingest_max_daily_calls: int = 200
+    auto_ingest_max_monthly_calls: int = 1000
     auto_ingest_cache_ttl_days: int = 30
     auto_ingest_search_attempts: int = 4
     auto_ingest_rag_rerank_min_score: float = 0.56

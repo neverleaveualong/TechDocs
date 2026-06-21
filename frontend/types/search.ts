@@ -4,11 +4,13 @@ export interface PatentSource {
   application_number: string;
   application_date: string;
   register_status: string;
+  ipc_number?: string;
   score?: number | null;
   score_type?: string;
   relevance_reason?: string;
   matched_terms?: string[];
   relevance_text: string;
+  full_content?: string;
 }
 
 export interface SearchResponse {

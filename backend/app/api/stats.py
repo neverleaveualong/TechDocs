@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pinecone import Pinecone
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import distinct, func
 
@@ -144,7 +144,7 @@ def _claimlens_db_stats() -> dict[str, int]:
 
 
 def _auto_ingest_stats() -> dict[str, int | bool]:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
