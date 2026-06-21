@@ -671,13 +671,25 @@ async def _save_claimlens_patents(patents: list[PatentItem]) -> tuple[int, int, 
 
 
 def _cached_result(query: str, mode: str) -> AutoIngestResult | None:
-    cutoff = _now() - timedelta(days=settings.auto_ingest_cache_ttl_days)
+    now = _now()
+    success_cutoff = now - timedelta(days=settings.auto_ingest_cache_ttl_days)
+    # 수집 실패(no_data, low_relevance) 결과는 개발 피드백 및 데이터 업데이트 확인을 위해 10분만 캐싱
+    failure_cutoff = now - timedelta(minutes=10)
+
     with SessionLocal() as db:
         row = (
             db.query(AutoIngestCache)
             .filter(AutoIngestCache.query_hash == _query_hash(query, mode))
-            .filter(AutoIngestCache.last_ingested_at >= cutoff)
-            .filter(AutoIngestCache.status.in_(["success", "no_data", "no_claims", "low_relevance"]))
+            .filter(
+                (
+                    (AutoIngestCache.status.in_(["success", "no_claims"]))
+                    & (AutoIngestCache.last_ingested_at >= success_cutoff)
+                )
+                | (
+                    (AutoIngestCache.status.in_(["no_data", "low_relevance"]))
+                    & (AutoIngestCache.last_ingested_at >= failure_cutoff)
+                )
+            )
             .order_by(AutoIngestCache.last_ingested_at.desc())
             .first()
         )
