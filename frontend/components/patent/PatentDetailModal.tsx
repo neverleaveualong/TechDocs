@@ -18,30 +18,21 @@ function formatScore(value?: number | null) {
   return typeof value === "number" ? value.toFixed(3) : "-";
 }
 
-function DetailItem({
+function DetailRow({
   label,
   value,
   mono = false,
-  icon,
 }: {
   label: string;
   value?: string | null;
   mono?: boolean;
-  icon?: string;
 }) {
   return (
-    <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200/80 bg-white p-3.5 shadow-sm transition hover:border-teal-200 hover:shadow-md">
-      {icon && (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 text-gray-400">
-          <i className={`${icon} text-lg`} />
-        </span>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400">{label}</p>
-        <p className={`mt-1 truncate text-sm font-bold text-gray-800 ${mono ? "font-mono" : ""}`}>
-          {value || "정보 없음"}
-        </p>
-      </div>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-slate-100 last:border-0 gap-1 sm:gap-4 text-sm">
+      <span className="font-semibold text-slate-400 text-xs sm:text-[13px]">{label}</span>
+      <span className={`font-bold text-slate-800 break-all sm:text-right text-xs sm:text-sm ${mono ? "font-mono" : ""}`}>
+        {value || "-"}
+      </span>
     </div>
   );
 }
@@ -65,12 +56,12 @@ function HighlightedText({ text, highlights }: { text: string; highlights: strin
           (h) => h.toLowerCase() === part.toLowerCase()
         );
         return isMatch ? (
-          <mark
+          <span
             key={i}
-            className="bg-teal-100/70 text-teal-950 font-bold px-0.5 rounded-sm border-b-2 border-teal-300"
+            className="text-teal-700 font-extrabold underline underline-offset-4 decoration-teal-400/80 decoration-2 tracking-wide"
           >
             {part}
-          </mark>
+          </span>
         ) : (
           part
         );
@@ -200,20 +191,26 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
             <button
               type="button"
               onClick={onClose}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400 shadow-sm transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all duration-200"
               aria-label="닫기"
             >
-              <i className="ri-close-line text-xl" />
+              <i className="ri-close-line text-2xl" />
             </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0 bg-slate-50/50 p-6 sm:p-8 space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <DetailItem label="출원번호" value={patent.application_number} mono icon="ri-fingerprint-line" />
-            <DetailItem label="출원일" value={formatDate(patent.application_date)} icon="ri-calendar-event-line" />
-            <DetailItem label="출원인" value={patent.applicant_name} icon="ri-building-line" />
-            <DetailItem label="IPC 분류" value={patent.ipc_number} mono icon="ri-git-branch-line" />
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 sm:px-6 shadow-inner">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
+              <div>
+                <DetailRow label="출원번호" value={patent.application_number} mono />
+                <DetailRow label="출원일자" value={formatDate(patent.application_date)} />
+              </div>
+              <div className="border-t border-slate-200/50 md:border-t-0 md:pt-0 pt-2">
+                <DetailRow label="출원인명" value={patent.applicant_name} />
+                <DetailRow label="IPC 분류" value={patent.ipc_number} mono />
+              </div>
+            </div>
           </div>
 
           {matchedTerms.length > 0 && (
