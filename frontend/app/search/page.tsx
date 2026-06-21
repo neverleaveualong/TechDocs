@@ -660,10 +660,9 @@ function CandidateSummaryCard({
 }) {
   const selected = tone === "selected";
   const patent = candidateToPatentSource(item);
+  const matchedTerms = Array.isArray(item.matchedTerms) ? item.matchedTerms.slice(0, 8).map(String) : [];
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(patent)}
+    <div
       className={`group w-full rounded-2xl border p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
         selected
           ? "border-teal-200 bg-white hover:border-teal-300 hover:shadow-[0_16px_42px_rgba(15,118,110,0.16)] focus:ring-teal-400"
@@ -671,51 +670,78 @@ function CandidateSummaryCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-bold leading-5 text-gray-950 group-hover:underline">
-          {String(item.title ?? "제목 없음")}
-        </p>
-        <div className={`shrink-0 rounded-2xl border px-3.5 py-2.5 text-right ${selected ? "border-teal-100 bg-teal-50" : "border-amber-100 bg-amber-50"}`}>
-          <p className={`font-mono text-xl font-black leading-none ${selected ? "text-teal-800" : "text-amber-800"}`}>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <CandidateMetaRow label="특허명" value={String(item.title ?? "제목 없음")} />
+          <CandidateMetaRow label="출원날짜" value={formatCandidateDate(item.applicationDate)} />
+          <CandidateMetaRow label="출원인명" value={String(item.applicantName ?? "-")} />
+          <CandidateMetaRow label="출원번호" value={String(item.applicationNumber ?? "-")} mono />
+        </div>
+        <div className={`shrink-0 rounded-2xl border px-4 py-2.5 text-center shadow-sm ${selected ? "border-teal-200 bg-teal-50/80" : "border-amber-200 bg-amber-50/80"}`}>
+          <p className={`font-mono text-2xl font-black leading-none ${selected ? "text-teal-900" : "text-amber-900"}`}>
             {formatScore(item.score)}
           </p>
-          <p className={`mt-0.5 text-[9px] font-bold ${selected ? "text-teal-600" : "text-amber-600"}`}>
+          <p className={`mt-1 text-[11px] font-extrabold tracking-wide ${selected ? "text-teal-700" : "text-amber-700"}`}>
             관련도
           </p>
         </div>
       </div>
-      <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-        <p className="text-[10px] font-bold text-gray-400">출원번호</p>
-        <p className="mt-0.5 break-all font-mono text-xs font-black text-gray-800">
-          {String(item.applicationNumber ?? "-")}
-        </p>
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${selected ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"}`}>
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-gray-100 pt-3">
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${selected ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"}`}>
           {selected ? "저장됨" : "제외됨"}
         </span>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
         {typeof item.selectionReason === "string" && (
-          <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+          <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
             {getSelectionReasonLabel(item.selectionReason)}
           </span>
         )}
         {typeof item.coverageCount === "number" && (
-          <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
+          <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
             키워드 매칭 {String(item.coverageCount)}개
           </span>
         )}
       </div>
-      {Array.isArray(item.matchedTerms) && item.matchedTerms.length > 0 && (
-        <p className="mt-2 text-[11px] leading-5 text-gray-500">
-          매칭: {item.matchedTerms.slice(0, 5).map(String).join(", ")}
-        </p>
+      {matchedTerms.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[11px] font-bold text-gray-400">매칭 키워드</p>
+          <div className="flex flex-wrap gap-1.5">
+            {matchedTerms.map((term) => (
+              <span key={term} className="rounded-full border border-teal-100 bg-white px-2 py-1 text-[11px] font-semibold text-teal-700">
+                {term}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
-      <div className={`mt-3 flex items-center gap-1 text-[10px] font-bold ${selected ? "text-teal-700" : "text-amber-700"}`}>
+      <button
+        type="button"
+        onClick={() => onOpen(patent)}
+        className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+          selected ? "bg-teal-700 hover:bg-teal-800 focus:ring-teal-400" : "bg-amber-700 hover:bg-amber-800 focus:ring-amber-400"
+        }`}
+      >
         <i className="ri-eye-line" />
         특허 내용 보기
-      </div>
-    </button>
+      </button>
+    </div>
+  );
+}
+
+function CandidateMetaRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value?: string | null;
+  mono?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-2 text-xs leading-5">
+      <span className="font-bold text-gray-400">{label}</span>
+      <span className={`break-words font-semibold text-gray-800 ${mono ? "font-mono" : ""}`}>
+        {value || "-"}
+      </span>
+    </div>
   );
 }
 
@@ -1058,6 +1084,12 @@ function candidateToPatentSource(item: Record<string, unknown>): PatentSource {
       `초록: ${abstract || "초록 정보가 없습니다."}`,
     ].join("\n"),
   };
+}
+
+function formatCandidateDate(value: unknown) {
+  const text = String(value ?? "");
+  if (!text || text.length < 8) return text || "-";
+  return `${text.slice(0, 4)}.${text.slice(4, 6)}.${text.slice(6, 8)}`;
 }
 
 function formatScore(value: unknown) {
