@@ -32,7 +32,7 @@ class SearchApiFlowTest(unittest.IsolatedAsyncioTestCase):
             def invoke(self, prompt_value):
                 return "answer"
 
-        def fake_prepare(body, retrieval_query):
+        def fake_prepare(body, retrieval_query, query_plan=None):
             captured_queries.append(retrieval_query)
             return {"sources": [], "prompt_value": "prompt"}
 

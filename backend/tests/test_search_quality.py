@@ -1,6 +1,8 @@
 import unittest
 
-from app.core.search_quality import evaluate_search_quality
+from langchain_core.documents import Document
+
+from app.core.search_quality import evaluate_search_quality, filter_relevant_documents
 from app.models.patent_query import PatentQueryPlan
 
 
@@ -136,6 +138,55 @@ class SearchQualityTest(unittest.TestCase):
         self.assertTrue(quality.should_auto_ingest)
         self.assertEqual(quality.reason, "low_keyword_overlap")
         self.assertEqual(quality.matched_terms, ["\uc5f0\ub8cc\uc804\uc9c0"])
+
+    def test_filters_irrelevant_source_documents_before_answer_context(self) -> None:
+        plan = PatentQueryPlan(
+            intent="rag_search",
+            search_keywords=[
+                "\uc218\uc18c \uc5f0\ub8cc\uc804\uc9c0",
+                "\ub4dc\ub860",
+                "\ubc30\ud130\ub9ac \uc5f4\uad00\ub9ac",
+                "\ube44\ud589 \uc548\uc815\uc131",
+            ],
+            technical_features=[
+                "\uc218\uc18c \uc5f0\ub8cc\uc804\uc9c0",
+                "\ub4dc\ub860",
+                "\uc5f4\uad00\ub9ac",
+                "\ube44\ud589 \uc548\uc815\uc131",
+            ],
+            synonyms=["\uc5f0\ub8cc\uc804\uc9c0"],
+            rag_query="\uc218\uc18c \uc5f0\ub8cc\uc804\uc9c0 \ub4dc\ub860 \ubc30\ud130\ub9ac \uc5f4\uad00\ub9ac",
+            kipris_queries=[
+                "\uc218\uc18c \uc5f0\ub8cc\uc804\uc9c0 \ub4dc\ub860",
+                "\ubc30\ud130\ub9ac \uc5f4\uad00\ub9ac",
+            ],
+        )
+        docs = [
+            Document(
+                page_content="\uc601\uc0c1 \uac10\uc2dc CCTV\uac00 \ub3d9\uc801 \uac1d\uccb4\ub97c \uc778\uc2dd\ud55c\ub2e4.",
+                metadata={
+                    "application_number": "10-CCTV",
+                    "invention_title": "\uc9c0\ub2a5\ud615 \uac10\uc2dc \uce74\uba54\ub77c",
+                    "_retrieval_score": 0.03,
+                    "_retrieval_score_type": "rrf",
+                },
+            ),
+            Document(
+                page_content="\uc218\uc18c \uc5f0\ub8cc\uc804\uc9c0 \ub4dc\ub860\uc758 \uc5f4\uad00\ub9ac\uc640 \ube44\ud589 \uc548\uc815\uc131\uc744 \uac1c\uc120\ud55c\ub2e4.",
+                metadata={
+                    "application_number": "10-DRONE",
+                    "invention_title": "\uc218\uc18c \ub4dc\ub860 \uc5f0\ub8cc\uc804\uc9c0 \uc5f4\uad00\ub9ac \uc2dc\uc2a4\ud15c",
+                    "_retrieval_score": 0.08,
+                    "_retrieval_score_type": "rrf",
+                },
+            ),
+        ]
+
+        filtered = filter_relevant_documents(docs, plan)
+
+        self.assertEqual([doc.metadata["application_number"] for doc in filtered], ["10-DRONE"])
+        self.assertEqual(filtered[0].metadata["_source_relevance_reason"], "matched_query_terms")
+        self.assertIn("\uc218\uc18c \uc5f0\ub8cc\uc804\uc9c0", filtered[0].metadata["_source_matched_terms"])
 
 
 if __name__ == "__main__":

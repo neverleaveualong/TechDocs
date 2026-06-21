@@ -29,6 +29,22 @@ class SearchQuality:
         }
 
 
+@dataclass(frozen=True)
+class SourceRelevance:
+    is_relevant: bool
+    reason: str
+    matched_terms: list[str]
+    best_score: float | None
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {
+            "isRelevant": self.is_relevant,
+            "reason": self.reason,
+            "matchedTerms": self.matched_terms,
+            "bestScore": self.best_score,
+        }
+
+
 def evaluate_search_quality(
     sources: list[dict],
     query_plan: PatentQueryPlan,
@@ -88,6 +104,74 @@ def evaluate_search_quality(
     )
 
 
+def filter_relevant_documents(
+    documents: list[Any],
+    query_plan: PatentQueryPlan,
+    *,
+    min_score: float = MIN_SOURCE_SCORE,
+) -> list[Any]:
+    """Keep only documents that have enough source-level evidence for the query."""
+    semantic_terms = _semantic_query_terms(query_plan)
+    if not semantic_terms:
+        return documents
+
+    filtered = []
+    for doc in documents:
+        relevance = evaluate_source_relevance(_document_to_source(doc), semantic_terms, min_score=min_score)
+        if not relevance.is_relevant:
+            continue
+        metadata = dict(getattr(doc, "metadata", {}) or {})
+        metadata["_source_relevance_reason"] = relevance.reason
+        metadata["_source_matched_terms"] = relevance.matched_terms
+        doc.metadata = metadata
+        filtered.append(doc)
+    return filtered
+
+
+def evaluate_source_relevance(
+    source: dict,
+    semantic_terms: list[str],
+    *,
+    min_score: float = MIN_SOURCE_SCORE,
+) -> SourceRelevance:
+    best_score = _best_score([source])
+    if source.get("score_type") == "vector" and best_score is not None and best_score < min_score:
+        return SourceRelevance(
+            is_relevant=False,
+            reason="low_retrieval_score",
+            matched_terms=[],
+            best_score=best_score,
+        )
+
+    matched_terms = _matched_terms([source], semantic_terms)
+    if not matched_terms:
+        return SourceRelevance(
+            is_relevant=False,
+            reason="low_keyword_overlap",
+            matched_terms=[],
+            best_score=best_score,
+        )
+
+    if (
+        _is_complex_query(semantic_terms)
+        and len(matched_terms) < MIN_MATCHED_TERMS_FOR_COMPLEX_QUERY
+        and not _has_strong_phrase_match(matched_terms)
+    ):
+        return SourceRelevance(
+            is_relevant=False,
+            reason="insufficient_feature_coverage",
+            matched_terms=matched_terms,
+            best_score=best_score,
+        )
+
+    return SourceRelevance(
+        is_relevant=True,
+        reason="matched_query_terms",
+        matched_terms=matched_terms,
+        best_score=best_score,
+    )
+
+
 def _best_score(sources: list[dict]) -> float | None:
     scores = []
     for source in sources:
@@ -136,11 +220,10 @@ def _semantic_query_terms(query_plan: PatentQueryPlan) -> list[str]:
     terms = []
     for term in raw_terms:
         cleaned = " ".join(str(term).strip().split())
-        key = _normalize_text(cleaned)
-        if not cleaned or key in seen:
-            continue
-        seen.add(key)
-        terms.append(cleaned)
+        _append_term(cleaned, seen, terms)
+        for token in cleaned.split():
+            if len(_normalize_text(token)) >= 2:
+                _append_term(token, seen, terms)
     return terms
 
 
@@ -154,3 +237,24 @@ def _has_strong_phrase_match(terms: list[str]) -> bool:
 
 def _normalize_text(value: str) -> str:
     return "".join(str(value).lower().split())
+
+
+def _append_term(term: str, seen: set[str], terms: list[str]) -> None:
+    key = _normalize_text(term)
+    if not term or key in seen:
+        return
+    seen.add(key)
+    terms.append(term)
+
+
+def _document_to_source(doc: Any) -> dict[str, Any]:
+    metadata = getattr(doc, "metadata", {}) or {}
+    return {
+        "invention_title": metadata.get("invention_title", ""),
+        "applicant_name": metadata.get("applicant_name", ""),
+        "application_number": metadata.get("application_number", ""),
+        "relevance_text": getattr(doc, "page_content", ""),
+        "full_content": getattr(doc, "page_content", ""),
+        "score": metadata.get("_retrieval_score"),
+        "score_type": metadata.get("_retrieval_score_type", ""),
+    }

@@ -23,10 +23,17 @@ function statusBadge(status: string) {
   );
 }
 
+function formatScore(score?: number | null) {
+  if (typeof score !== "number") return null;
+  return score.toFixed(3);
+}
+
 export default function PatentCard({ patent, index }: PatentCardProps) {
   const date = patent.application_date
     ? `${patent.application_date.slice(0, 4)}.${patent.application_date.slice(4, 6)}.${patent.application_date.slice(6, 8)}`
     : null;
+  const score = formatScore(patent.score);
+  const matchedTerms = Array.isArray(patent.matched_terms) ? patent.matched_terms.slice(0, 4) : [];
 
   return (
     <div className="group flex gap-4 p-4 rounded-xl border border-gray-100 bg-white hover:border-teal-200 hover:shadow-sm transition-all duration-200">
@@ -44,6 +51,11 @@ export default function PatentCard({ patent, index }: PatentCardProps) {
             {patent.invention_title || "제목 없음"}
           </h4>
           {statusBadge(patent.register_status)}
+          {score && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-100">
+              관련도 {score}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
@@ -59,6 +71,21 @@ export default function PatentCard({ patent, index }: PatentCardProps) {
           <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2 mt-2">
             {patent.relevance_text}
           </p>
+        )}
+
+        {(matchedTerms.length > 0 || patent.score_type) && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px] text-gray-500">
+            {patent.score_type && (
+              <span className="px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50">
+                {patent.score_type}
+              </span>
+            )}
+            {matchedTerms.map((term) => (
+              <span key={term} className="px-1.5 py-0.5 rounded border border-teal-100 bg-teal-50 text-teal-700">
+                {term}
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </div>
