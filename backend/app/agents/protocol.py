@@ -78,5 +78,7 @@ class RAGAgentState(TypedDict, total=False):
     history: list[AgentMessage]               # 에이전트 대화 히스토리 기록
     next_action: AgentAction                  # Supervisor가 결정한 다음 행동
     next_parameters: dict[str, Any]           # 다음 행동 시 필요한 파라미터 (strategy, top_k 등)
+    _latest_decision: dict                    # Supervisor 최신 결정 이벤트 (SSE 스트리밍용)
+    _latest_agent_event: dict                 # 에이전트 완료 최신 이벤트 (SSE 스트리밍용)
 
 
