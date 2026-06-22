@@ -8,11 +8,12 @@ from app.config import settings
 class Base(DeclarativeBase):
     pass
 
-# PostgreSQL 커넥션 엔진
+# PostgreSQL 또는 SQLite 커넥션 엔진
+is_sqlite = settings.database_url.startswith("sqlite")
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,
-    connect_args={"connect_timeout": 5},
+    pool_pre_ping=not is_sqlite,
+    connect_args={} if is_sqlite else {"connect_timeout": 5},
 )
 
 SessionLocal = sessionmaker(

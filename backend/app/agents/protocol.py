@@ -80,5 +80,6 @@ class RAGAgentState(TypedDict, total=False):
     next_parameters: dict[str, Any]           # 다음 행동 시 필요한 파라미터 (strategy, top_k 등)
     _latest_decision: dict                    # Supervisor 최신 결정 이벤트 (SSE 스트리밍용)
     _latest_agent_event: dict                 # 에이전트 완료 최신 이벤트 (SSE 스트리밍용)
+    prompt_value: Any                         # LLM 답변 생성을 위한 최종 프롬프트 값
 
 
