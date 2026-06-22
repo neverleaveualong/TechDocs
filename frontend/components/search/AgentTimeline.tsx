@@ -138,7 +138,7 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
                   <span className={`rounded border px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase ${actionBadgeColor}`}>
                     {nextAction}
                   </span>
-                  {event.decision?.parameters?.strategy && (
+                  {!!event.decision?.parameters?.strategy && (
                     <span className="rounded bg-gray-50 border border-gray-150 px-1.5 py-0.5 text-[9px] font-medium text-gray-500 font-mono">
                       {String(event.decision.parameters.strategy)} (k={String(event.decision.parameters.top_k || 5)})
                     </span>
@@ -212,7 +212,7 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
             iconColor = "text-green-600 bg-green-50 border-green-100";
             title = "특허 자동 수집 완료";
             agentBadge = "Ingest Agent";
-            const saved = event.data?.patents_saved || 0;
+            const saved = typeof event.data?.patents_saved === "number" ? event.data.patents_saved : 0;
             renderingDetails = (
               <p className="mt-1 text-xs text-gray-500 leading-relaxed">
                 KIPRIS 수집 완료. RAG 인덱싱 및 로컬 DB 저장: <strong className="text-gray-700">{saved}건</strong>
