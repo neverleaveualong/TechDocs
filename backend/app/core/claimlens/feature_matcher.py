@@ -6,7 +6,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from app.core.claimlens.vector_search import ClaimSearchCandidate, ClaimSearchRecord
+from app.core.claimlens.vector_search import (
+    TEXT_TYPE_PATENT_ABSTRACT,
+    ClaimSearchCandidate,
+    ClaimSearchRecord,
+)
 
 MatchStatus = Literal["matched", "partial", "not_found", "uncertain"]
 
@@ -35,6 +39,12 @@ _STOPWORDS = {
     "통하여",
     "기반",
 }
+
+_PATENT_DOMAIN_TERMS = {"특허", "청구항", "지식재산", "선행기술", "문헌"}
+_SEARCH_TERMS = {"검색", "탐색", "조회"}
+_ANALYSIS_TERMS = {"분석", "검토", "비교", "판단"}
+_AI_TERMS = {"ai", "인공지능", "생성형", "자연어처리", "llm"}
+_EVIDENCE_TERMS = {"근거", "출처", "인용", "레퍼런스"}
 
 
 @dataclass(frozen=True)
@@ -71,8 +81,12 @@ def extract_product_features(product_description: str, limit: int = 8) -> list[s
         seen.add(clause)
         if len(features) >= limit:
             break
+
+    structured = _decompose_short_product_description(product_description, limit=limit)
+    if structured and (len(features) <= 1 or len(_tokenize(product_description)) <= 10):
+        return structured
     if features:
-        return features
+        return features[:limit]
     fallback = product_description.strip()
     return [fallback] if fallback else []
 
@@ -89,7 +103,6 @@ def build_claim_chart_rows(
         if not claim_elements and candidate.matched_claim_element is not None:
             claim_elements = [candidate.matched_claim_element]
         if not claim_elements:
-            rows.append(_candidate_without_claim_element_row(candidate))
             continue
 
         for element in claim_elements:
@@ -204,6 +217,16 @@ def generate_claim_chart_report(rows: Sequence[ClaimChartRow]) -> str:
 
     counts = Counter(row.match_status for row in rows)
     first = rows[0]
+    limitations = []
+    if counts["matched"] == 0:
+        limitations.append("- 명확한 matched 항목이 없어 기술적 일치 여부를 단정하기 어렵습니다.")
+    if counts["not_found"] + counts["uncertain"] > counts["matched"] + counts["partial"]:
+        limitations.append("- not_found/uncertain 항목이 많아 제품 설명을 더 구체화해야 합니다.")
+    limitation_section = (
+        "\n\n### 분석 한계\n\n" + "\n".join(limitations)
+        if limitations
+        else ""
+    )
     return (
         "## 기술 검토 초안\n\n"
         f"후보 특허 `{first.application_number}`의 청구항 구성요소를 제품 설명과 비교했습니다.\n\n"
@@ -212,6 +235,7 @@ def generate_claim_chart_report(rows: Sequence[ClaimChartRow]) -> str:
         f"- not_found: {counts['not_found']}\n"
         f"- uncertain: {counts['uncertain']}\n\n"
         "이 결과는 법률적 침해 판단이 아니라, 제품 설명과 청구항 구성요소 간의 기술적 비교 초안입니다."
+        f"{limitation_section}"
     )
 
 
@@ -234,6 +258,7 @@ def claim_candidate_to_dict(candidate: ClaimSearchCandidate) -> dict[str, object
     return {
         "vectorId": candidate.vector_id,
         "score": candidate.score,
+        "claimComparisonReady": candidate.matched_text_type != TEXT_TYPE_PATENT_ABSTRACT and bool(candidate.claim_elements or candidate.matched_claim_element),
         "matchedTextType": candidate.matched_text_type,
         "matchedText": candidate.matched_text,
         "patent": {
@@ -284,6 +309,47 @@ def _candidate_without_claim_element_row(candidate: ClaimSearchCandidate) -> Cla
         uncertainty="검색 후보에 claim element 원문이 연결되지 않아 구성요소 단위 비교를 보류했습니다.",
         score=0.0,
     )
+
+
+def _decompose_short_product_description(product_description: str, *, limit: int) -> list[str]:
+    normalized = product_description.strip()
+    if not normalized:
+        return []
+    text = normalized.lower()
+    tokens = set(_tokenize(normalized))
+    features: list[str] = []
+
+    def has_any(terms: set[str]) -> bool:
+        return bool(tokens & terms) or any(term in text for term in terms)
+
+    def add(feature: str) -> None:
+        if feature not in features and len(features) < limit:
+            features.append(feature)
+
+    if has_any(_PATENT_DOMAIN_TERMS):
+        add("특허 데이터와 특허 문헌 정보를 수집하거나 저장한다")
+        add("특허 청구항, 초록, 출원 정보 등 분석 대상 데이터를 관리한다")
+    elif "문서" in tokens or "데이터" in tokens:
+        add("문서 또는 데이터를 수집하거나 저장한다")
+
+    if has_any(_SEARCH_TERMS):
+        target = "특허 문헌" if has_any(_PATENT_DOMAIN_TERMS) else "문서"
+        add(f"사용자의 기술 설명 또는 질의를 입력받아 관련 {target}을 검색한다")
+
+    if has_any(_AI_TERMS):
+        target = "특허 데이터" if has_any(_PATENT_DOMAIN_TERMS) else "문서 데이터"
+        add(f"AI를 활용해 {target}의 의미와 관련성을 분석한다")
+
+    if has_any(_ANALYSIS_TERMS):
+        target = "특허 후보와 청구항" if has_any(_PATENT_DOMAIN_TERMS) else "검색 결과"
+        add(f"{target}을 비교하고 분석 결과를 생성한다")
+
+    if has_any(_EVIDENCE_TERMS):
+        add("분석 결과의 근거와 출처를 함께 제공한다")
+
+    if not features and len(_tokenize(normalized)) <= 10:
+        add(normalized)
+    return features
 
 
 def _clean_feature(text: str) -> str:

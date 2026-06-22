@@ -41,6 +41,9 @@ class RerankEventItem:
     selected: bool
     matched_terms: list[str]
     selection_reason: str
+    threshold: float
+    threshold_passed: bool
+    fallback_passed: bool
 
     def to_event_data(self) -> dict:
         return {
@@ -56,6 +59,9 @@ class RerankEventItem:
             "matchedTerms": self.matched_terms,
             "coverageCount": len(self.matched_terms),
             "selectionReason": self.selection_reason,
+            "threshold": self.threshold,
+            "thresholdPassed": self.threshold_passed,
+            "fallbackPassed": self.fallback_passed,
         }
 
 
@@ -365,6 +371,9 @@ async def _search_sample_patents(
                     selected=item.patent.application_number in selected_numbers,
                     selected_signatures=selected_signatures,
                 ),
+                threshold=min_rerank_score,
+                threshold_passed=item.score >= min_rerank_score,
+                fallback_passed=item.score < min_rerank_score and _is_auto_ingest_candidate(item, min_rerank_score),
             )
             for item in ranked_all[:10]
         ],
