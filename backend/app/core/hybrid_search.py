@@ -63,29 +63,45 @@ class HybridSearch:
     def _build_bm25_index(self):
         """Pinecone에서 문서를 가져와 BM25 인덱스 구축"""
         logger.info("BM25 인덱스 구축 중...")
-        all_ids = []
-        ns = self.namespace or ""
-        for ids_chunk in self._index.list(namespace=ns):
-            all_ids.extend(ids_chunk)
+        try:
+            all_ids = []
+            ns = self.namespace or ""
+            # list() API가 무한 루프를 돌거나 지연되는 것을 방지하기 위해 최대 1000개 청크로 제한
+            for ids_chunk in self._index.list(namespace=ns):
+                all_ids.extend(ids_chunk)
+                if len(all_ids) >= 1000:
+                    break
 
-        self._bm25_corpus = []
-        self._bm25_metadata = []
+            if not all_ids:
+                logger.warning("Pinecone에 문서가 없어 빈 BM25 코퍼스로 구축합니다.")
+                self._bm25_corpus = []
+                self._bm25_metadata = []
+                self._bm25 = BM25Okapi([["빈문서"]])
+                return
 
-        for i in range(0, len(all_ids), 100):
-            batch = all_ids[i:i+100]
-            fetched = self._index.fetch(ids=batch, namespace=ns)
-            for vec_id, vec in fetched.get("vectors", {}).items():
-                text = ""
-                # page_content가 메타데이터에 있을 수 있음
-                meta = vec.get("metadata", {})
-                text = meta.get("page_content", "") or meta.get("text", "")
-                if text:
-                    self._bm25_corpus.append(text)
-                    self._bm25_metadata.append(meta)
+            self._bm25_corpus = []
+            self._bm25_metadata = []
 
-        tokenized = [_tokenize_korean(doc) for doc in self._bm25_corpus]
-        self._bm25 = BM25Okapi(tokenized)
-        logger.info(f"BM25 인덱스 구축 완료: {len(self._bm25_corpus)}개 문서")
+            for i in range(0, len(all_ids), 100):
+                batch = all_ids[i:i+100]
+                fetched = self._index.fetch(ids=batch, namespace=ns)
+                for vec_id, vec in fetched.get("vectors", {}).items():
+                    meta = vec.get("metadata", {})
+                    text = meta.get("page_content", "") or meta.get("text", "")
+                    if text:
+                        self._bm25_corpus.append(text)
+                        self._bm25_metadata.append(meta)
+
+            if not self._bm25_corpus:
+                self._bm25 = BM25Okapi([["빈문서"]])
+                return
+
+            tokenized = [_tokenize_korean(doc) for doc in self._bm25_corpus]
+            self._bm25 = BM25Okapi(tokenized)
+            logger.info(f"BM25 인덱스 구축 완료: {len(self._bm25_corpus)}개 문서")
+        except Exception as e:
+            logger.exception("BM25 인덱스 빌드 실패, Vector Only 모드로 우회합니다: %s", e)
+            self._bm25 = BM25Okapi([["에러"]])
 
     def _vector_search(self, query: str, top_k: int = 20) -> list[dict]:
         """Vector (의미) 검색"""
@@ -165,9 +181,13 @@ class HybridSearch:
                 doc["rank"] = rank + 1
 
         if use_bm25:
-            bm25_results = self._bm25_search(query, top_k=bm25_top_k)
-            for rank, doc in enumerate(bm25_results):
-                doc["rank"] = rank + 1
+            try:
+                bm25_results = self._bm25_search(query, top_k=bm25_top_k)
+                for rank, doc in enumerate(bm25_results):
+                    doc["rank"] = rank + 1
+            except Exception as e:
+                logger.error("BM25 검색 실패, RAG 키워드 검색 제외 및 Vector 검색으로 우회: %s", e)
+                bm25_results = []
 
         # RRF 점수 계산
         # score_rrf = sum(1 / (k + rank)) for each list the doc appears in
