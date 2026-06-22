@@ -54,6 +54,26 @@ export type SearchStreamEvent =
       query_log_id?: number;
     }
   | {
+      type: "agent_decision";
+      agent: string;
+      decision: {
+        next_action: string;
+        reasoning: string;
+        parameters: Record<string, unknown>;
+      };
+    }
+  | {
+      type: "agent_action";
+      agent: string;
+      message: string;
+    }
+  | {
+      type: "agent_completed";
+      agent: string;
+      reasoning: string;
+      payload?: Record<string, unknown>;
+    }
+  | {
       type: "error";
       detail: string;
     };

@@ -6,6 +6,7 @@ import SearchBar from "@/components/search/SearchBar";
 import AiAnswer from "@/components/search/AiAnswer";
 import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
+import AgentTimeline from "@/components/search/AgentTimeline";
 import { searchPatents, searchPatentsStream, streamClaimLensAnalysis } from "@/lib/api";
 import type { ClaimLensEvent } from "@/types/claimlens";
 import type { PatentSource, SearchStreamEvent } from "@/types/search";
@@ -223,19 +224,26 @@ export default function SearchPage() {
             </div>
           )}
 
-          {mode === "rag" && (streamedAnswer || streamedSources.length > 0) && (
+          {mode === "rag" && (streamedAnswer || streamedSources.length > 0 || ragEvents.length > 0) && (
             <div className="space-y-4 animate-fade-in">
-              <AiAnswer answer={streamedAnswer} query={activeQuery} queryLogId={queryLogId} isStreaming={isStreaming} />
-              <SearchResults sources={streamedSources} />
+              <AgentTimeline events={ragEvents} />
+              {(streamedAnswer || streamedSources.length > 0) && (
+                <>
+                  <AiAnswer answer={streamedAnswer} query={activeQuery} queryLogId={queryLogId} isStreaming={isStreaming} />
+                  <SearchResults sources={streamedSources} />
+                </>
+              )}
               <AutoIngestDebugPanel events={ragEvents} />
-              <ResetButton
-                onClick={() => {
-                  setStreamedAnswer("");
-                  setStreamedSources([]);
-                  setQueryLogId(undefined);
-                  setRagEvents([]);
-                }}
-              />
+              {(streamedAnswer || streamedSources.length > 0) && (
+                <ResetButton
+                  onClick={() => {
+                    setStreamedAnswer("");
+                    setStreamedSources([]);
+                    setQueryLogId(undefined);
+                    setRagEvents([]);
+                  }}
+                />
+              )}
             </div>
           )}
 
