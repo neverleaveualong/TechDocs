@@ -400,6 +400,7 @@ function ClaimLensResult({
         <SummaryTile label="매칭" value={`${summary.matchedCount}/${summary.rowCount}`} tone={summary.matchedCount === 0 ? "warn" : "ok"} />
       </div>
 
+      <QualityBanner decision={latestDecision} />
       <SupervisorDecisionPanel decision={latestDecision} autoIngest={autoIngest} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -415,7 +416,7 @@ function ClaimLensResult({
             ) : (
               features.map((feature, index) => (
                 <div key={index} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-[11px] font-semibold text-gray-400">Feature {index + 1}</p>
+                  <p className="text-[11px] font-semibold text-gray-400">기능 {index + 1}</p>
                   <p className="mt-1 text-sm leading-5 text-gray-800">{String(feature)}</p>
                 </div>
               ))
@@ -452,6 +453,47 @@ function SummaryTile({ label, value, tone }: { label: string; value: ReactNode; 
       <p className="text-[11px] font-semibold opacity-70">{label}</p>
       <p className="mt-1 text-xl font-extrabold tracking-tight">{value}</p>
     </div>
+  );
+}
+
+function QualityBanner({ decision }: { decision?: ClaimLensEvent }) {
+  const data = asRecord(decision?.data);
+  const grade = String(data.qualityGrade ?? "");
+  if (!grade) return null;
+
+  const summary = String(data.confidenceSummary ?? "분석 품질을 평가하는 중입니다.");
+  const fields = Array.isArray(data.recommendedInputFields) ? data.recommendedInputFields.map(String) : [];
+  const isGood = grade === "good";
+  const isInsufficient = grade === "insufficient";
+  const klass = isGood
+    ? "border-teal-100 bg-teal-50 text-teal-800"
+    : isInsufficient
+      ? "border-amber-200 bg-amber-50 text-amber-900"
+      : "border-yellow-100 bg-yellow-50 text-yellow-900";
+  const title = isGood ? "분석 신뢰도 양호" : isInsufficient ? "추가 설명 필요" : "검토자 확인 필요";
+
+  return (
+    <section className={`rounded-xl border p-4 shadow-sm ${klass}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <i className={isGood ? "ri-shield-check-line" : "ri-error-warning-line"} />
+            <h2 className="text-sm font-extrabold">{title}</h2>
+            <Badge label={grade} tone={isGood ? "ok" : "warn"} />
+          </div>
+          <p className="mt-2 text-sm leading-6 opacity-80">{summary}</p>
+        </div>
+        {fields.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 lg:max-w-md lg:justify-end">
+            {fields.slice(0, 6).map((field) => (
+              <span key={field} className="rounded border border-current/10 bg-white/70 px-2 py-1 text-[11px] font-semibold">
+                {field}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -523,7 +565,7 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
       <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-bold text-gray-800">{String(data.status ?? "-")}</span>
-          <span className="font-mono text-[11px] text-teal-700">cutoff {formatScore(data.rerankMinScore)}</span>
+          <span className="font-mono text-[11px] text-gray-500">기준 {formatScore(data.rerankMinScore)}</span>
         </div>
         {typeof data.message === "string" && data.message.length > 0 && (
           <p className="mt-2 text-[11px] leading-5 text-gray-500">{data.message}</p>
@@ -532,6 +574,9 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
       {candidates.slice(0, 5).map((candidate, index) => {
         const item = asRecord(candidate);
         const selected = item.selected === true;
+        const thresholdPassed = item.thresholdPassed === true;
+        const fallbackPassed = item.fallbackPassed === true;
+        const reason = String(item.selectionReason ?? "-");
         return (
           <div
             key={`${String(item.applicationNumber ?? index)}-${index}`}
@@ -546,6 +591,11 @@ function AutoIngestDebugPanel({ events }: { events: Array<ClaimLensEvent | Searc
               <span className={`text-[10px] font-bold ${selected ? "text-teal-700" : "text-gray-400"}`}>
                 {selected ? "selected" : "filtered"}
               </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Badge label={reason} tone={fallbackPassed ? "warn" : thresholdPassed ? "ok" : "neutral"} />
+              {thresholdPassed ? <Badge label="기준 통과" tone="ok" /> : null}
+              {fallbackPassed ? <Badge label="fallback 저장" tone="warn" /> : null}
             </div>
           </div>
         );
@@ -625,6 +675,7 @@ function CandidateItem({ candidate }: { candidate: unknown }) {
   const patent = asRecord(data.patent);
   const score = typeof data.score === "number" ? data.score : undefined;
   const low = typeof score === "number" && score < 0.45;
+  const ready = data.claimComparisonReady === true;
   return (
     <div className={`rounded-lg border p-3 ${low ? "border-amber-100 bg-amber-50/60" : "border-gray-100 bg-gray-50"}`}>
       <div className="flex items-start justify-between gap-2">
@@ -634,6 +685,9 @@ function CandidateItem({ candidate }: { candidate: unknown }) {
       <p className="mt-1 font-mono text-[11px] text-gray-400">
         {String(patent.applicationNumber ?? "-")} · {String(data.matchedTextType ?? "-")}
       </p>
+      <div className="mt-2">
+        <Badge label={ready ? "claim 비교 가능" : "후보 요약 전용"} tone={ready ? "ok" : "neutral"} />
+      </div>
       {low && <p className="mt-2 text-[11px] font-medium text-amber-700">관련도가 낮아 자동 수집/재검색 대상입니다.</p>}
     </div>
   );

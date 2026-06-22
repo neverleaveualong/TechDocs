@@ -7,6 +7,10 @@ from app.core.embeddings import get_embeddings
 from app.models.patent import PatentItem
 from app.models.patent_query import PatentQueryPlan
 
+_STRONG_PATENT_TERMS = ("특허", "청구항", "지식재산", "선행기술", "문헌", "특허분석")
+_MEDIUM_PATENT_TERMS = ("검색", "분석", "AI", "인공지능", "자연어처리", "데이터")
+_GENERIC_SEARCH_TERMS = ("사내 정보", "상품 검색", "입찰", "추천", "전자상거래")
+
 
 @dataclass(frozen=True)
 class RerankedPatent:
@@ -38,11 +42,7 @@ def rerank_patents(
     patent_vectors = embeddings.embed_documents(patent_texts)
 
     ranked = [
-        RerankedPatent(
-            patent=patent,
-            score=_cosine_similarity(query_vector, patent_vector),
-            matched_terms=_matched_query_terms(query_plan, patent),
-        )
+        _reranked_patent(query_plan, patent, _cosine_similarity(query_vector, patent_vector))
         for patent, patent_vector in zip(patents, patent_vectors, strict=True)
     ]
     return [
@@ -50,6 +50,43 @@ def rerank_patents(
         for item in sorted(ranked, key=lambda item: item.score, reverse=True)
         if item.score >= min_score
     ][:top_k]
+
+
+def _reranked_patent(
+    query_plan: PatentQueryPlan,
+    patent: PatentItem,
+    vector_score: float,
+) -> RerankedPatent:
+    matched_terms = _matched_query_terms(query_plan, patent)
+    score = vector_score + _domain_score_adjustment(query_plan, patent, matched_terms)
+    return RerankedPatent(
+        patent=patent,
+        score=max(0.0, min(1.0, score)),
+        matched_terms=matched_terms,
+    )
+
+
+def _domain_score_adjustment(
+    query_plan: PatentQueryPlan,
+    patent: PatentItem,
+    matched_terms: list[str],
+) -> float:
+    query_text = _normalize_text(_query_text(query_plan))
+    patent_text = _normalize_text(_patent_text(patent))
+    matched_text = _normalize_text(" ".join(matched_terms))
+    patent_query = any(_normalize_text(term) in query_text for term in _STRONG_PATENT_TERMS)
+    strong_hits = sum(1 for term in _STRONG_PATENT_TERMS if _normalize_text(term) in patent_text)
+    medium_hits = sum(1 for term in _MEDIUM_PATENT_TERMS if _normalize_text(term) in patent_text)
+
+    adjustment = min(0.14, strong_hits * 0.04)
+    adjustment += min(0.06, medium_hits * 0.012)
+    if patent_query and strong_hits == 0:
+        adjustment -= 0.09
+    if patent_query and any(_normalize_text(term) in patent_text for term in _GENERIC_SEARCH_TERMS):
+        adjustment -= 0.04
+    if patent_query and any(_normalize_text(term) in matched_text for term in _STRONG_PATENT_TERMS):
+        adjustment += 0.03
+    return adjustment
 
 
 def _query_text(query_plan: PatentQueryPlan) -> str:
