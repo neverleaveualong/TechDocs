@@ -1,6 +1,7 @@
 """Hybrid Search: BM25(키워드) + Vector(의미) + RRF 순위 병합"""
 
 import logging
+import re
 from typing import Optional
 
 from rank_bm25 import BM25Okapi
@@ -11,16 +12,39 @@ from app.core.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
+# Kiwi 싱글톤
+_kiwi_instance = None
+
+def _get_kiwi():
+    global _kiwi_instance
+    if _kiwi_instance is None:
+        try:
+            from kiwipiepy import Kiwi
+            _kiwi_instance = Kiwi()
+            logger.info("Kiwi 형태소 분석기 로드 완료")
+        except ImportError:
+            logger.warning("kiwipiepy 미설치. pip install kiwipiepy 필요.")
+            return None
+    return _kiwi_instance
 
 def _tokenize_korean(text: str) -> list[str]:
-    """한국어 + 영문 혼합 텍스트 토큰화 (간이 버전)
-    
-    정규식 기반으로 공백/구두점 분리. 
-    프로덕션에서는 Kiwi/Konlpy 등 형태소 분석기 권장.
+    """한국어 형태소 분석 (Kiwi) + 영문 토큰화
+    Kiwi로 명사/동사어간/영문/숫자를 추출하여 BM25 정확도 향상.
+    예: "반도체소자" → ["반도체", "소자"]
     """
-    import re
-    # 영문 소문자화 + 숫자 유지 + 한국어 음절 유지
-    tokens = re.findall(r'[가-힣]+|[a-zA-Z0-9]+', text.lower())
+    kiwi = _get_kiwi()
+    if kiwi is None:
+        return re.findall(r'[가-힣]+|[a-zA-Z0-9]+', text.lower())
+    
+    tokens = []
+    try:
+        result = kiwi.analyze(text)
+        for sentence_result in result:
+            for morph in sentence_result[0]:
+                if morph.tag in ('NNG', 'NNP', 'VV', 'SL', 'SN'):
+                    tokens.append(morph.form.lower())
+    except Exception:
+        tokens = re.findall(r'[가-힣]+|[a-zA-Z0-9]+', text.lower())
     return tokens
 
 
