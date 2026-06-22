@@ -20,7 +20,8 @@ SUPERVISOR_PROMPT = """\
 - DONE: 모든 작업 완료.
 
 ## 판단 기준
-- 검색 결과 0건 → INGEST
+- 최초 진입 (검색을 한 번도 안 함, 히스토리가 비어있음) → SEARCH
+- 검색 결과 0건 (이미 검색을 수행했으나 0건) → INGEST
 - 검색 결과 관련도 낮음 (best_score < 0.5 또는 matched_terms 0건) → INGEST
 - 충분한 근거 (sources ≥ 1, 키워드 겹침 있음) → GENERATE
 - INGEST 후에도 부족 → GENERATE (빈 결과로 "관련 특허 없음" 응답)
@@ -147,6 +148,15 @@ class SupervisorAgent:
         source_count = state.get("source_count", 0)
         quality_reason = state.get("quality_reason", "")
         ingest_done = state.get("ingest_done", False)
+
+        # 검색 이력이 아예 없는 최초 진입일 경우 SEARCH 반환
+        has_searched = any(msg.action == AgentAction.SEARCH for msg in self.history)
+        if not has_searched and source_count == 0 and not ingest_done:
+            return SupervisorDecision(
+                next_action=AgentAction.SEARCH,
+                reasoning="Fallback: 최초 검색 실행",
+                parameters={"strategy": "hybrid", "top_k": 5}
+            )
 
         needs_ingest_reasons = {"no_sources", "low_retrieval_score", "low_keyword_overlap"}
 
