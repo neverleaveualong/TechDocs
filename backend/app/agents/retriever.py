@@ -7,7 +7,7 @@ from app.core.search_quality import evaluate_search_quality, filter_relevant_doc
 
 
 class RetrieverAgent:
-    """검색을 실행하고 품질을 평가하는 에이전트."""
+    """Runs retrieval and evaluates search quality."""
 
     def __init__(self, pipeline: RAGPipeline, namespace: str = None):
         self.pipeline = pipeline
@@ -26,6 +26,9 @@ class RetrieverAgent:
         if query_plan:
             document_filter = lambda docs: filter_relevant_documents(docs, query_plan)
 
+        timed_out = False
+        prepared = None
+
         try:
             prepared = await asyncio.wait_for(
                 asyncio.to_thread(
@@ -40,25 +43,43 @@ class RetrieverAgent:
                 timeout=8,
             )
         except asyncio.TimeoutError:
-            if not use_hybrid:
-                raise
+            timed_out = True
+        except Exception:
+            timed_out = True
+
+        if timed_out and use_hybrid:
             strategy = "vector_fallback"
-            prepared = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.pipeline.prepare_search,
-                    query=query,
-                    top_k=top_k,
-                    namespace=self.namespace,
-                    use_hybrid=False,
-                    use_reranker=False,
-                    document_filter=document_filter,
-                ),
-                timeout=12,
-            )
+            try:
+                prepared = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.pipeline.prepare_search,
+                        query=query,
+                        top_k=top_k,
+                        namespace=self.namespace,
+                        use_hybrid=False,
+                        use_reranker=False,
+                        document_filter=document_filter,
+                    ),
+                    timeout=8,
+                )
+                timed_out = False
+            except asyncio.TimeoutError:
+                prepared = self.pipeline.prepare_empty_search(query)
+            except Exception:
+                prepared = self.pipeline.prepare_empty_search(query)
+
+        if prepared is None:
+            prepared = self.pipeline.prepare_empty_search(query)
 
         quality = None
         if query_plan:
             quality = evaluate_search_quality(prepared["sources"], query_plan)
+
+        reason_parts = [f"{strategy} search returned {len(prepared['sources'])} sources"]
+        if timed_out:
+            reason_parts.append("retrieval timed out; returned empty result")
+        if quality:
+            reason_parts.append(f"quality: {quality.reason}")
 
         return AgentMessage(
             sender="retriever",
@@ -70,6 +91,5 @@ class RetrieverAgent:
                 "quality": quality.to_event_data() if quality else None,
                 "strategy_used": strategy,
             },
-            reasoning=f"{strategy}으로 {len(prepared['sources'])}건 검색"
-            + (f", 품질: {quality.reason}" if quality else ""),
+            reasoning=", ".join(reason_parts),
         )
