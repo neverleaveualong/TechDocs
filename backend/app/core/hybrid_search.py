@@ -21,24 +21,33 @@ def _get_kiwi():
     # 100% 원천 차단하기 위해 Kiwi C++ 형태소 분석기 로딩을 비활성화하고 정규식 토큰화로 안전하게 우회합니다.
     return None
 
+def _clean_korean_josa(word: str) -> str:
+    # 한글 조사 목록 (긴 조사부터 순서대로 매칭하여 오인칭 방지)
+    josa_list = [
+        '으로써', '으로서', '으로부터', '조차도', '만으로', '에게서',
+        '에서', '으로', '로써', '로서', '보다', '부터', '까지', '마저',
+        '조차', '한테', '더러', '에게', '와', '과', '에', '의', '은', '는',
+        '이', '가', '을', '를', '도', '만', '고', '랑'
+    ]
+    for josa in josa_list:
+        if word.endswith(josa) and len(word) > len(josa) + 1:
+            stemmed = word[:-len(josa)]
+            if re.match(r'^[가-힣0-9a-zA-Z]+$', stemmed):
+                return stemmed
+    return word
+
 def _tokenize_korean(text: str) -> list[str]:
-    """한국어 형태소 분석 (Kiwi) + 영문 토큰화
-    Kiwi로 명사/동사어간/영문/숫자를 추출하여 BM25 정확도 향상.
-    예: "반도체소자" → ["반도체", "소자"]
+    """한국어 조사 제거 형태소 원형 근사 + 영문 토큰화
+    C++ Kiwi 모듈을 사용하지 않고 순수 파이썬 정규식 및 조사 필터링을 사용하여
+    서버 락과 OOM 위험이 없으면서도 BM25 키워드 일치율을 비약적으로 끌어올립니다.
     """
-    kiwi = _get_kiwi()
-    if kiwi is None:
-        return re.findall(r'[가-힣]+|[a-zA-Z0-9]+', text.lower())
-    
+    raw_tokens = re.findall(r'[가-힣0-9a-zA-Z]+', text.lower())
     tokens = []
-    try:
-        result = kiwi.analyze(text)
-        for sentence_result in result:
-            for morph in sentence_result[0]:
-                if morph.tag in ('NNG', 'NNP', 'VV', 'SL', 'SN'):
-                    tokens.append(morph.form.lower())
-    except Exception:
-        tokens = re.findall(r'[가-힣]+|[a-zA-Z0-9]+', text.lower())
+    for token in raw_tokens:
+        cleaned = _clean_korean_josa(token)
+        tokens.append(cleaned)
+        if cleaned != token:
+            tokens.append(token)
     return tokens
 
 
