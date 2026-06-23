@@ -1,5 +1,6 @@
 from app.agents.protocol import AgentAction, AgentMessage
 from app.ingestion.auto_ingest import maybe_auto_ingest_for_rag
+from app.core.hybrid_search import clear_bm25_cache
 
 
 class IngestAgent:
@@ -10,6 +11,13 @@ class IngestAgent:
         query_plan = message.payload.get("query_plan")
 
         result = await maybe_auto_ingest_for_rag(query, query_plan=query_plan)
+
+        if result.should_retry_search:
+            try:
+                from app.core.hybrid_search import clear_bm25_cache
+                clear_bm25_cache()
+            except Exception as e:
+                pass
 
         return AgentMessage(
             sender="ingest",
