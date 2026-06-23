@@ -686,7 +686,9 @@ def _cached_result(query: str, mode: str) -> AutoIngestResult | None:
             db.query(AutoIngestCache)
             .filter(AutoIngestCache.query_hash == _query_hash(query, mode))
             .filter(AutoIngestCache.last_ingested_at >= cutoff)
-            .filter(AutoIngestCache.status.in_(["success", "no_data", "no_claims", "low_relevance"]))
+            # 수집 결과가 0건인 과거 실패/빈 기록(no_data, low_relevance)은 cached 재활용에서 배제하여 락인을 예방
+            .filter(AutoIngestCache.status.in_(["success", "no_claims"]))
+            .filter(AutoIngestCache.patents_saved > 0)
             .order_by(AutoIngestCache.last_ingested_at.desc())
             .first()
         )
