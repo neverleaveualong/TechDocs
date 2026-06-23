@@ -1,8 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import type { SearchStreamEvent } from "@/types/search";
 
+const agentBadgeMap: Record<string, string> = {
+  "Query Analyzer": "검색어 분석 에이전트",
+  "Supervisor": "오케스트레이터",
+  "Retriever": "검색 에이전트",
+  "Generator": "답변 생성 에이전트",
+  "Ingest Agent": "수집 에이전트"
+};
+
+const actionTitleMap: Record<string, string> = {
+  "search": "특허 검색 실행",
+  "ingest": "특허 실시간 수집",
+  "generate": "AI 답변 생성 중"
+};
+
 export default function AgentTimeline({ events }: { events: SearchStreamEvent[] }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   // 타임라인에 표시할 이벤트만 필터링
   const timelineEvents = events.filter((e) =>
     [
@@ -22,6 +39,12 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
   // 전체 작업 완료 여부 확인
   const isAllDone = events.some((e) => e.type === "done");
   const hasError = events.some((e) => e.type === "error");
+
+  // 가리기 규칙: 4개 이상일 때 접혀있다면 최신 4개만 노출
+  const shouldTruncate = timelineEvents.length > 4;
+  const visibleEvents = shouldTruncate && !isExpanded 
+    ? timelineEvents.slice(-4) 
+    : timelineEvents;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md">
@@ -52,22 +75,49 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
         </div>
       </div>
 
-      <div className="relative border-l-2 border-gray-100 pl-4 ml-3.5 space-y-6">
-        {timelineEvents.map((event, idx) => {
-          const isLast = idx === timelineEvents.length - 1;
+      {/* 접혀있을 때 숨겨진 항목의 수 표시와 더보기 버튼 */}
+      {shouldTruncate && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-gray-50 hover:bg-teal-50/50 border border-gray-200 hover:border-teal-200 rounded-lg text-xs font-bold text-teal-700 transition-all shadow-sm"
+          >
+            {isExpanded ? (
+              <>
+                <i className="ri-arrow-up-double-line text-sm" />
+                워크플로우 접기 (전체 {timelineEvents.length}개 단계)
+              </>
+            ) : (
+              <>
+                <i className="ri-arrow-down-double-line text-sm animate-bounce" />
+                이전 실행 단계 ({timelineEvents.length - 4}개) 더보기
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      <div className="relative border-l-2 border-gray-100 pl-4 ml-3.5 space-y-6 transition-all duration-300">
+        {visibleEvents.map((event, idx) => {
+          // 원래 배열(timelineEvents)에서의 실제 인덱스
+          const actualIdx = shouldTruncate && !isExpanded 
+            ? timelineEvents.length - 4 + idx 
+            : idx;
+          const isLast = actualIdx === timelineEvents.length - 1;
           const isActiveNode = isLast && !isAllDone && !hasError;
 
           let icon = "ri-checkbox-blank-circle-line";
           let iconColor = "text-gray-400 bg-gray-50 border-gray-200";
           let title = "";
-          let agentBadge = "";
+          let rawBadge = "";
           let renderingDetails = null;
 
           if (event.type === "query_plan") {
             icon = "ri-compass-3-line";
             iconColor = "text-teal-600 bg-teal-50 border-teal-100";
             title = "검색 계획 수립 완료";
-            agentBadge = "Query Analyzer";
+            rawBadge = "Query Analyzer";
             
             const data = event.data || {};
             const searchKeywords = (data.searchKeywords || data.search_keywords || []) as string[];
@@ -114,14 +164,15 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           } else if (event.type === "agent_decision") {
             icon = "ri-brain-line";
             iconColor = "text-indigo-600 bg-indigo-50 border-indigo-100";
-            
+            title = "의사결정 진행";
+            rawBadge = "Supervisor";
+
             const nextAction = event.decision?.next_action || "";
+            const cleanAction = actionTitleMap[nextAction.toLowerCase()] || nextAction;
+            
             const isIngest = nextAction.toLowerCase() === "ingest";
             const isSearch = nextAction.toLowerCase() === "search";
             const isGenerate = nextAction.toLowerCase() === "generate";
-            
-            title = "다음 액션 결정";
-            agentBadge = "Supervisor";
 
             const actionBadgeColor = isSearch
               ? "bg-teal-50 text-teal-700 border-teal-200"
@@ -135,8 +186,8 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
               <div className="mt-2 space-y-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-gray-400 font-medium">행동 지침:</span>
-                  <span className={`rounded border px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase ${actionBadgeColor}`}>
-                    {nextAction}
+                  <span className={`rounded border px-2 py-0.5 text-[10px] font-bold tracking-wide ${actionBadgeColor}`}>
+                    {cleanAction}
                   </span>
                   {!!event.decision?.parameters?.strategy && (
                     <span className="rounded bg-gray-50 border border-gray-150 px-1.5 py-0.5 text-[9px] font-medium text-gray-500 font-mono">
@@ -160,8 +211,11 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
               agent === "retriever"
                 ? "text-teal-600 bg-teal-50 border-teal-100"
                 : "text-rose-600 bg-rose-50 border-rose-100";
-            title = `${agent.charAt(0).toUpperCase() + agent.slice(1)} 작업 개시`;
-            agentBadge = agent.charAt(0).toUpperCase() + agent.slice(1);
+            
+            rawBadge = agent === "retriever" ? "Retriever" : agent === "generator" ? "Generator" : agent;
+            const friendlyAgentName = agentBadgeMap[rawBadge] || rawBadge;
+            title = `${friendlyAgentName} 실행`;
+            
             renderingDetails = (
               <p className="mt-1 text-xs text-gray-600 font-medium leading-relaxed">
                 {event.message || ""}
@@ -171,8 +225,10 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
             const agent = event.agent || "";
             icon = "ri-checkbox-circle-line";
             iconColor = "text-green-600 bg-green-50 border-green-100";
-            title = `${agent.charAt(0).toUpperCase() + agent.slice(1)} 작업 완료`;
-            agentBadge = agent.charAt(0).toUpperCase() + agent.slice(1);
+            
+            rawBadge = agent === "retriever" ? "Retriever" : agent === "generator" ? "Generator" : agent;
+            const friendlyAgentName = agentBadgeMap[rawBadge] || rawBadge;
+            title = `${friendlyAgentName} 완료`;
             
             const sourceCount = event.payload?.source_count || event.payload?.sources_count;
             const citationValid = event.payload?.citation_valid;
@@ -200,8 +256,8 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           } else if (event.type === "auto_ingest_started") {
             icon = "ri-download-cloud-2-line";
             iconColor = "text-amber-600 bg-amber-50 border-amber-100";
-            title = "특허 자동 수집 시작";
-            agentBadge = "Ingest Agent";
+            title = "KIPRIS 특허 실시간 수집 시작";
+            rawBadge = "Ingest Agent";
             renderingDetails = (
               <p className="mt-1 text-xs text-gray-600 font-medium leading-relaxed">
                 {event.message || ""}
@@ -210,8 +266,8 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           } else if (event.type === "auto_ingest_completed") {
             icon = "ri-checkbox-circle-line";
             iconColor = "text-green-600 bg-green-50 border-green-100";
-            title = "특허 자동 수집 완료";
-            agentBadge = "Ingest Agent";
+            title = "KIPRIS 특허 실시간 수집 완료";
+            rawBadge = "Ingest Agent";
             const saved = typeof event.data?.patents_saved === "number" ? event.data.patents_saved : 0;
             renderingDetails = (
               <p className="mt-1 text-xs text-gray-500 leading-relaxed">
@@ -221,8 +277,8 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           } else if (event.type === "retry_search") {
             icon = "ri-refresh-line";
             iconColor = "text-blue-600 bg-blue-50 border-blue-100";
-            title = "특허 재검색 시도";
-            agentBadge = "Retriever";
+            title = "특허 재수집 및 검색 재시도";
+            rawBadge = "Retriever";
             renderingDetails = (
               <p className="mt-1 text-xs text-gray-600 font-medium leading-relaxed">
                 {event.message || ""}
@@ -231,8 +287,8 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           } else if (event.type === "search_quality") {
             icon = "ri-pulse-line";
             iconColor = "text-purple-600 bg-purple-50 border-purple-100";
-            title = "검색 품질 평가";
-            agentBadge = "Retriever";
+            title = "검색 품질 평가 완료";
+            rawBadge = "Retriever";
             
             const bestScore = typeof event.data?.best_score === "number" ? event.data.best_score : undefined;
             const qualityReason = String(event.data?.reason || "unknown");
@@ -255,12 +311,14 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
             );
           }
 
+          const friendlyBadge = agentBadgeMap[rawBadge] || rawBadge;
+
           return (
             <div
               key={idx}
-              className="relative group transition-all"
+              className="relative group transition-all animate-fade-in"
               data-agent-step={event.type}
-              data-agent-name={agentBadge || "unknown"}
+              data-agent-name={rawBadge || "unknown"}
               data-agent-active={isActiveNode ? "true" : "false"}
               data-agent-status={isActiveNode ? "running" : "completed"}
             >
@@ -277,9 +335,9 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
               <div className="pl-3.5">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-gray-800 tracking-tight">{title}</span>
-                  {agentBadge && (
-                    <span className="rounded bg-gray-50 px-1.5 py-0.5 text-[8.5px] font-bold text-gray-500 border border-gray-200/60 tracking-wider uppercase">
-                      {agentBadge}
+                  {friendlyBadge && (
+                    <span className="rounded bg-gray-50 px-1.5 py-0.5 text-[8.5px] font-bold text-gray-500 border border-gray-200/60 tracking-wider">
+                      {friendlyBadge}
                     </span>
                   )}
                   {isActiveNode && (
