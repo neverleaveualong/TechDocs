@@ -686,18 +686,7 @@ def _cached_result(query: str, mode: str) -> AutoIngestResult | None:
 
 
 def _within_budget(expected_calls: int = 1) -> tuple[bool, str]:
-    now = _now()
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    with SessionLocal() as db:
-        daily_calls = _sum_calls_since(db, day_start)
-        monthly_calls = _sum_calls_since(db, month_start)
-
-    if daily_calls + expected_calls > settings.auto_ingest_max_daily_calls:
-        return False, "오늘 자동 수집 KIPRIS 호출 한도에 도달했습니다."
-    if monthly_calls + expected_calls > settings.auto_ingest_max_monthly_calls:
-        return False, "이번 달 자동 수집 KIPRIS 호출 한도에 도달했습니다."
+    # 캐시 기능 비활성화로 인해 DB 예산 조회를 건너뛰고 항상 허용합니다.
     return True, ""
 
 
@@ -711,29 +700,8 @@ def _sum_calls_since(db, since: datetime) -> int:
 
 
 def _record_result(query: str, result: AutoIngestResult) -> None:
-    now = _now()
-    try:
-        with SessionLocal() as db:
-            db.add(
-                AutoIngestCache(
-                    query_hash=_query_hash(query, result.mode),
-                    normalized_query=_normalize_query(query),
-                    mode=result.mode,
-                    status=result.status,
-                    kipris_calls_used=result.kipris_calls_used,
-                    patents_found=result.patents_found,
-                    patents_saved=result.patents_saved,
-                    rag_vectors_stored=result.rag_vectors_stored,
-                    claimlens_patents_saved=result.claimlens_patents_saved,
-                    agent_vectors_stored=result.agent_vectors_stored,
-                    error_message=result.message if result.status == "error" else None,
-                    created_at=now,
-                    last_ingested_at=now,
-                )
-            )
-            db.commit()
-    except Exception:
-        logger.exception("Failed to record auto ingest cache for %s", query)
+    # 캐시 기능 비활성화로 인해 DB 캐시 기록을 하지 않고 즉시 리턴합니다.
+    return
 
 
 def _query_hash(query: str, mode: str) -> str:
