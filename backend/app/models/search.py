@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
-    use_hybrid: bool = False
+    use_hybrid: bool = True
     use_reranker: bool = False
     auto_ingest: bool = True
 

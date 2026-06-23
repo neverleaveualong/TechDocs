@@ -37,7 +37,7 @@ class RetrieverAgent:
                     use_reranker=use_reranker,
                     document_filter=document_filter,
                 ),
-                timeout=25,
+                timeout=8,
             )
         except asyncio.TimeoutError:
             if not use_hybrid:
@@ -53,7 +53,7 @@ class RetrieverAgent:
                     use_reranker=False,
                     document_filter=document_filter,
                 ),
-                timeout=20,
+                timeout=12,
             )
 
         quality = None
