@@ -86,6 +86,8 @@ async def search(request: Request, body: SearchRequest):
         initial_state = {
             "query": body.query,
             "query_plan": _serialize_query_plan(query_plan),
+            "top_k": body.top_k,
+            "use_hybrid": body.use_hybrid,
             "sources": [],
             "ingest_done": False,
             "auto_ingest": body.auto_ingest,
@@ -146,6 +148,8 @@ async def search_stream(request: Request, body: SearchRequest):
             initial_state = {
                 "query": body.query,
                 "query_plan": _serialize_query_plan(query_plan),
+                "top_k": body.top_k,
+                "use_hybrid": body.use_hybrid,
                 "sources": [],
                 "ingest_done": False,
                 "auto_ingest": body.auto_ingest,

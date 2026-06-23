@@ -35,11 +35,15 @@ async def supervisor_node(state: RAGAgentState) -> Dict[str, Any]:
 
     # Supervisor 결정 실행
     decision = await supervisor_agent.decide(state_to_decide)
+    parameters = dict(decision.parameters or {})
+    parameters["top_k"] = state.get("top_k", parameters.get("top_k", 5))
+    if decision.next_action == AgentAction.SEARCH and not state.get("use_hybrid", True):
+        parameters["strategy"] = "vector"
 
     # 결정 사항을 State에 업데이트
     return {
         "next_action": decision.next_action,
-        "next_parameters": decision.parameters,
+        "next_parameters": parameters,
         # API SSE 스트리밍에 감지할 수 있도록 decision 내용 전달
         "_latest_decision": {
             "type": "agent_decision",
@@ -47,7 +51,7 @@ async def supervisor_node(state: RAGAgentState) -> Dict[str, Any]:
             "decision": {
                 "next_action": decision.next_action.value,
                 "reasoning": decision.reasoning,
-                "parameters": decision.parameters,
+                "parameters": parameters,
             },
         },
     }

@@ -1,3 +1,5 @@
+import asyncio
+
 from app.agents.protocol import AgentAction, AgentMessage
 from app.config import settings
 from app.core.rag_pipeline import RAGPipeline
@@ -24,14 +26,35 @@ class RetrieverAgent:
         if query_plan:
             document_filter = lambda docs: filter_relevant_documents(docs, query_plan)
 
-        prepared = self.pipeline.prepare_search(
-            query=query,
-            top_k=top_k,
-            namespace=self.namespace,
-            use_hybrid=use_hybrid,
-            use_reranker=use_reranker,
-            document_filter=document_filter,
-        )
+        try:
+            prepared = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.pipeline.prepare_search,
+                    query=query,
+                    top_k=top_k,
+                    namespace=self.namespace,
+                    use_hybrid=use_hybrid,
+                    use_reranker=use_reranker,
+                    document_filter=document_filter,
+                ),
+                timeout=25,
+            )
+        except asyncio.TimeoutError:
+            if not use_hybrid:
+                raise
+            strategy = "vector_fallback"
+            prepared = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.pipeline.prepare_search,
+                    query=query,
+                    top_k=top_k,
+                    namespace=self.namespace,
+                    use_hybrid=False,
+                    use_reranker=False,
+                    document_filter=document_filter,
+                ),
+                timeout=20,
+            )
 
         quality = None
         if query_plan:
