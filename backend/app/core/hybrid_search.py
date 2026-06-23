@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 from typing import Optional
 
 from rank_bm25 import BM25Okapi
@@ -16,19 +17,9 @@ logger = logging.getLogger(__name__)
 _kiwi_instance = None
 
 def _get_kiwi():
-    global _kiwi_instance
-    if _kiwi_instance is None:
-        try:
-            from kiwipiepy import Kiwi
-            _kiwi_instance = Kiwi(num_workers=1)
-            logger.info("Kiwi 형태소 분석기 로드 완료 (num_workers=1)")
-        except ImportError:
-            logger.warning("kiwipiepy 미설치. pip install kiwipiepy 필요.")
-            return None
-        except Exception as e:
-            logger.warning("Kiwi 형태소 분석기 초기화 실패, Fallback 처리: %s", e)
-            return None
-    return _kiwi_instance
+    # Render 무료 사양 서버 환경의 CPU 스로틀링, 스레드 데드락, 512MB RAM OOM(Killed) 크래시를
+    # 100% 원천 차단하기 위해 Kiwi C++ 형태소 분석기 로딩을 비활성화하고 정규식 토큰화로 안전하게 우회합니다.
+    return None
 
 def _tokenize_korean(text: str) -> list[str]:
     """한국어 형태소 분석 (Kiwi) + 영문 토큰화
@@ -51,28 +42,51 @@ def _tokenize_korean(text: str) -> list[str]:
     return tokens
 
 
+# 전역 BM25 캐시 (메모리 누수 방지 및 다중 테넌시 네임스페이스 지원)
+_bm25_cache = {}
+
+def clear_bm25_cache(namespace: Optional[str] = None):
+    ns = namespace or ""
+    global _bm25_cache
+    if ns in _bm25_cache:
+        del _bm25_cache[ns]
+        logger.info("BM25 캐시 클리어 완료 (namespace: %s)", ns)
+    else:
+        _bm25_cache.clear()
+        logger.info("전체 BM25 캐시 클리어 완료")
+
+
 class HybridSearch:
     """BM25 + Vector Hybrid Search with RRF (Reciprocal Rank Fusion)"""
 
     def __init__(self, namespace: Optional[str] = None):
-        self.namespace = namespace
+        self.namespace = namespace or ""
         self._embeddings = get_embeddings()
         pc = Pinecone(api_key=settings.pinecone_api_key)
         self._index = pc.Index(settings.pinecone_index_name)
-        self._bm25_corpus: list[str] = []
-        self._bm25_metadata: list[dict] = []
-        self._bm25: Optional[BM25Okapi] = None
+        
+        # 캐싱된 인덱스가 존재하면 메모리에서 즉시 획득
+        cache_data = _bm25_cache.get(self.namespace, {})
+        self._bm25_corpus = cache_data.get("corpus", [])
+        self._bm25_metadata = cache_data.get("metadata", [])
+        self._bm25 = cache_data.get("bm25", None)
 
     def _build_bm25_index(self):
         """Pinecone에서 문서를 가져와 BM25 인덱스 구축"""
+        # 이미 인덱스가 캐싱되어 있으면 추가 fetch 및 빌드를 스킵
+        if self._bm25 is not None:
+            return
+
         logger.info("BM25 인덱스 구축 중...")
+        start_time = time.time()
         try:
             all_ids = []
             ns = self.namespace or ""
             # list() API가 무한 루프를 돌거나 지연되는 것을 방지하기 위해 최대 1000개 청크로 제한
+            # 3.0초 이상 경과 시 즉시 조기 탈출
             for ids_chunk in self._index.list(namespace=ns):
                 all_ids.extend(ids_chunk)
-                if len(all_ids) >= 1000:
+                if len(all_ids) >= 1000 or (time.time() - start_time) > 3.0:
                     break
 
             if not all_ids:
@@ -80,12 +94,21 @@ class HybridSearch:
                 self._bm25_corpus = []
                 self._bm25_metadata = []
                 self._bm25 = BM25Okapi([["빈문서"]])
+                _bm25_cache[self.namespace] = {
+                    "corpus": self._bm25_corpus,
+                    "metadata": self._bm25_metadata,
+                    "bm25": self._bm25
+                }
                 return
 
             self._bm25_corpus = []
             self._bm25_metadata = []
 
+            # 100개 단위 fetch 시 누적 5.0초 경과 시 즉시 루프 조기 탈출
             for i in range(0, len(all_ids), 100):
+                if (time.time() - start_time) > 5.0:
+                    logger.warning("BM25 인덱스 빌드 시간 초과(5초 경과)로 조기 중단합니다.")
+                    break
                 batch = all_ids[i:i+100]
                 fetched = self._index.fetch(ids=batch, namespace=ns)
                 for vec_id, vec in fetched.get("vectors", {}).items():
@@ -97,11 +120,23 @@ class HybridSearch:
 
             if not self._bm25_corpus:
                 self._bm25 = BM25Okapi([["빈문서"]])
+                _bm25_cache[self.namespace] = {
+                    "corpus": self._bm25_corpus,
+                    "metadata": self._bm25_metadata,
+                    "bm25": self._bm25
+                }
                 return
 
             tokenized = [_tokenize_korean(doc) for doc in self._bm25_corpus]
             self._bm25 = BM25Okapi(tokenized)
-            logger.info(f"BM25 인덱스 구축 완료: {len(self._bm25_corpus)}개 문서")
+            
+            # 빌드 완료 후 메모리에 캐싱
+            _bm25_cache[self.namespace] = {
+                "corpus": self._bm25_corpus,
+                "metadata": self._bm25_metadata,
+                "bm25": self._bm25
+            }
+            logger.info("BM25 인덱스 구축 완료 및 캐싱: %d개 문서", len(self._bm25_corpus))
         except Exception as e:
             logger.exception("BM25 인덱스 빌드 실패, Vector Only 모드로 우회합니다: %s", e)
             self._bm25 = BM25Okapi([["에러"]])
