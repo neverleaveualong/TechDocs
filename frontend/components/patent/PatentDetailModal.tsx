@@ -14,8 +14,12 @@ function formatDate(value: string) {
   return `${value.slice(0, 4)}.${value.slice(4, 6)}.${value.slice(6, 8)}`;
 }
 
-function formatScore(value?: number | null) {
-  return typeof value === "number" ? value.toFixed(3) : "-";
+// RRF Score를 100% 기준으로 정규화하여 출력하는 헬퍼 함수
+function formatNormalizedScore(value?: number | null) {
+  if (typeof value !== "number") return "-";
+  // RRF 최대 실질적 점수인 0.0328을 100% 기준으로 매칭율 계산
+  const percentage = Math.min(Math.round((value / 0.03278) * 100), 100);
+  return `${percentage}%`;
 }
 
 function DetailRow({
@@ -160,7 +164,7 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
         role="dialog"
         aria-modal="true"
         aria-labelledby="patent-detail-title"
-        className="relative z-10 flex h-full max-h-[85vh] sm:max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+        className="relative z-10 flex h-full max-h-[85vh] sm:max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
       >
         <div className="sticky top-0 z-10 shrink-0 border-b border-gray-100 bg-white/95 backdrop-blur-md px-6 py-5 sm:px-8 sm:py-6">
           <div className="relative flex items-start justify-between gap-6">
@@ -172,7 +176,7 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
                   </span>
                 )}
                 <span className="rounded-full border-0 bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-1 text-xs font-black text-white shadow-md shadow-blue-500/10">
-                  관련도 {formatScore(patent.score)}
+                  매칭 유사도 {formatNormalizedScore(patent.score)}
                 </span>
                 {patent.score_type && (
                   <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-bold uppercase text-gray-500 tracking-wider">
@@ -199,63 +203,72 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 bg-slate-50/50 p-6 sm:p-8 space-y-6">
-          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 sm:px-6 shadow-inner">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
-              <div>
+        <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0 bg-slate-50/20">
+          {/* 좌측 사이드바 (요약 및 분석 정보) */}
+          <div className="w-full md:w-[38%] md:border-r border-slate-200 bg-slate-50/50 p-6 sm:p-8 overflow-y-auto space-y-6 shrink-0 md:max-h-full">
+            {/* 기본 메타데이터 카드 */}
+            <div className="rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-sm">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <i className="ri-profile-line text-sm text-teal-600" />
+                특허 기본 메타데이터
+              </h3>
+              <div className="space-y-0.5">
                 <DetailRow label="출원번호" value={patent.application_number} mono />
                 <DetailRow label="출원일자" value={formatDate(patent.application_date)} />
-              </div>
-              <div className="border-t border-slate-200/50 md:border-t-0 md:pt-0 pt-2">
                 <DetailRow label="출원인명" value={patent.applicant_name} />
                 <DetailRow label="IPC 분류" value={patent.ipc_number} mono />
               </div>
             </div>
+
+            {/* AI 분석 최종 채택 사유 */}
+            {patent.relevance_reason && (
+              <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/70 to-amber-50/30 p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <i className="ri-lightbulb-flash-line text-lg text-amber-600 animate-pulse" />
+                  <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">AI 최종 채택 사유</h3>
+                </div>
+                <p className="text-[13px] sm:text-[13.5px] leading-6 font-medium text-amber-900 whitespace-pre-line">
+                  {patent.relevance_reason}
+                </p>
+              </div>
+            )}
+
+            {/* 매칭 키워드 */}
+            {matchedTerms.length > 0 && (
+              <div className="rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-3">
+                  <i className="ri-focus-3-line text-lg text-teal-600" />
+                  <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">매칭 검색 키워드</h3>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {matchedTerms.map((term) => (
+                    <span
+                      key={term}
+                      className="rounded-lg border border-teal-100/70 bg-teal-50/50 px-2.5 py-1 text-xs font-black text-teal-700 hover:bg-teal-100/55 transition-colors"
+                    >
+                      #{term}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {matchedTerms.length > 0 && (
-            <div className="rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
-                <i className="ri-focus-3-line text-lg text-teal-600" />
-                <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">질의와 매칭된 핵심 키워드</h3>
+          {/* 우측 본문 뷰어 */}
+          <div className="flex-1 p-6 sm:p-8 overflow-y-auto bg-white md:max-h-full">
+            <div className="rounded-2xl border border-gray-255 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-5 py-4">
+                <div className="flex items-center gap-2.5">
+                  <i className="ri-file-text-line text-lg text-slate-500" />
+                  <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">특허 상세 및 초록 본문</h3>
+                </div>
+                <span className="rounded-full bg-gray-200/75 px-2.5 py-1 font-mono text-[10px] font-bold text-gray-600">
+                  {content.length.toLocaleString()} 자
+                </span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {matchedTerms.map((term) => (
-                  <span
-                    key={term}
-                    className="rounded-full border border-teal-100/70 bg-teal-50/50 px-3 py-1 text-xs font-black text-teal-700 hover:bg-teal-100/50 transition-colors"
-                  >
-                    #{term}
-                  </span>
-                ))}
+              <div className="p-6 sm:p-8">
+                <PatentContentRenderer content={content} matchedTerms={matchedTerms} />
               </div>
-            </div>
-          )}
-
-          {patent.relevance_reason && (
-            <div className="rounded-2xl border-l-4 border-amber-500 bg-amber-50/50 p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <i className="ri-lightbulb-flash-line text-lg text-amber-600" />
-                <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">AI 분석에 따른 최종 채택 사유</h3>
-              </div>
-              <p className="text-[14px] leading-7 font-medium text-amber-900/90 whitespace-pre-line">
-                {patent.relevance_reason}
-              </p>
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <i className="ri-file-text-line text-lg text-slate-500" />
-                <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">특허 상세 및 초록 본문</h3>
-              </div>
-              <span className="rounded-full bg-gray-200/70 px-2.5 py-1 font-mono text-[10px] font-bold text-gray-600">
-                {content.length.toLocaleString()} 글자
-              </span>
-            </div>
-            <div className="p-6 sm:p-8">
-              <PatentContentRenderer content={content} matchedTerms={matchedTerms} />
             </div>
           </div>
         </div>
