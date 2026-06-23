@@ -2,7 +2,7 @@ from typing import Any, Dict
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.agents.protocol import RAGAgentState, AgentAction, AgentMessage, QueryPlanWrapper
+from app.agents.protocol import RAGAgentState, AgentAction, AgentMessage, QueryPlanWrapper, SupervisorDecision
 from app.agents.supervisor import SupervisorAgent
 from app.agents.retriever import RetrieverAgent
 from app.agents.ingest import IngestAgent
@@ -14,6 +14,22 @@ supervisor_agent = SupervisorAgent(llm=rag_pipeline.llm)
 retriever_agent = RetrieverAgent(pipeline=rag_pipeline)
 ingest_agent = IngestAgent()
 generator_agent = GeneratorAgent(pipeline=rag_pipeline)
+
+
+def _supervisor_response(decision: SupervisorDecision, parameters: dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "next_action": decision.next_action,
+        "next_parameters": parameters,
+        "_latest_decision": {
+            "type": "agent_decision",
+            "agent": "supervisor",
+            "decision": {
+                "next_action": decision.next_action.value,
+                "reasoning": decision.reasoning,
+                "parameters": parameters,
+            },
+        },
+    }
 
 
 async def supervisor_node(state: RAGAgentState) -> Dict[str, Any]:
@@ -33,6 +49,62 @@ async def supervisor_node(state: RAGAgentState) -> Dict[str, Any]:
         "ingest_result": state.get("ingest_result"),
     }
 
+    history = state.get("history", [])
+    last_action = history[-1].action if history else None
+    preferred_strategy = "hybrid" if state.get("use_hybrid", True) else "vector"
+    top_k = state.get("top_k", state.get("next_parameters", {}).get("top_k", 5))
+    source_count = len(state.get("sources", []))
+    quality_reason = state.get("quality_reason", "no_sources")
+    ingest_result = state.get("ingest_result") or {}
+
+    if not any(msg.action == AgentAction.SEARCH for msg in history):
+        decision = SupervisorDecision(
+            next_action=AgentAction.SEARCH,
+            reasoning="최초 진입이므로 검색을 실행해야 합니다.",
+            parameters={"strategy": preferred_strategy, "top_k": top_k},
+        )
+        return _supervisor_response(decision, decision.parameters)
+
+    if last_action == AgentAction.INGEST and ingest_result.get("should_retry_search"):
+        decision = SupervisorDecision(
+            next_action=AgentAction.SEARCH,
+            reasoning="새로 수집된 벡터를 반영하기 위해 검색을 다시 실행합니다.",
+            parameters={"strategy": preferred_strategy, "top_k": top_k},
+        )
+        return _supervisor_response(decision, decision.parameters)
+
+    if source_count > 0 and quality_reason == "enough_sources":
+        decision = SupervisorDecision(
+            next_action=AgentAction.GENERATE,
+            reasoning="충분한 검색 근거가 있어 답변 생성을 진행합니다.",
+            parameters={"top_k": top_k},
+        )
+        return _supervisor_response(decision, decision.parameters)
+
+    if source_count == 0 and not state.get("ingest_done", False) and state.get("auto_ingest", True):
+        decision = SupervisorDecision(
+            next_action=AgentAction.INGEST,
+            reasoning="검색 결과가 부족하여 KIPRIS 자동 수집을 실행합니다.",
+            parameters={"top_k": top_k},
+        )
+        return _supervisor_response(decision, decision.parameters)
+
+    if source_count == 0 and not state.get("auto_ingest", True):
+        decision = SupervisorDecision(
+            next_action=AgentAction.GENERATE,
+            reasoning="자동 수집이 비활성화되어 현재 검색 결과로 답변을 생성합니다.",
+            parameters={"top_k": top_k},
+        )
+        return _supervisor_response(decision, decision.parameters)
+
+    if state.get("ingest_done", False):
+        decision = SupervisorDecision(
+            next_action=AgentAction.GENERATE,
+            reasoning="수집 이후 추가 근거가 부족하여 현재 상태로 답변을 생성합니다.",
+            parameters={"top_k": top_k},
+        )
+        return _supervisor_response(decision, decision.parameters)
+
     # Supervisor 결정 실행
     decision = await supervisor_agent.decide(state_to_decide)
     parameters = dict(decision.parameters or {})
@@ -40,21 +112,7 @@ async def supervisor_node(state: RAGAgentState) -> Dict[str, Any]:
     if decision.next_action == AgentAction.SEARCH and not state.get("use_hybrid", True):
         parameters["strategy"] = "vector"
 
-    # 결정 사항을 State에 업데이트
-    return {
-        "next_action": decision.next_action,
-        "next_parameters": parameters,
-        # API SSE 스트리밍에 감지할 수 있도록 decision 내용 전달
-        "_latest_decision": {
-            "type": "agent_decision",
-            "agent": "supervisor",
-            "decision": {
-                "next_action": decision.next_action.value,
-                "reasoning": decision.reasoning,
-                "parameters": parameters,
-            },
-        },
-    }
+    return _supervisor_response(decision, parameters)
 
 
 async def retriever_node(state: RAGAgentState) -> Dict[str, Any]:

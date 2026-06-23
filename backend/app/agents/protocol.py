@@ -66,6 +66,8 @@ class QueryPlanWrapper:
 class RAGAgentState(TypedDict, total=False):
     query: str                                # 최초 사용자 질문
     query_plan: Any                           # 검색 계획 (PatentQueryPlan)
+    top_k: int                                # Search result limit
+    use_hybrid: bool                          # Whether hybrid retrieval is requested
     auto_ingest: bool                         # 자동 수집 활성화 여부
     sources: list[dict]                       # 검색된 소스 특허 목록
     best_score: float                         # 최고 관련도 점수
