@@ -243,12 +243,21 @@ async def search_stream(request: Request, body: SearchRequest):
                     ingest_evt = node_output["_latest_agent_event"]
                     yield _encode_stream_event(ingest_evt)
 
-                    yield _encode_stream_event(
-                        {
-                            "type": "retry_search",
+                    ingest_result = node_output.get("ingest_result") or {}
+                    if ingest_result.get("should_retry_search"):
+                        yield _encode_stream_event(
+                            {
+                                "type": "retry_search",
                             "message": "새로 수집된 데이터를 RAG 파이프라인에 검색 반영합니다.",
-                        }
-                    )
+                            }
+                        )
+                    else:
+                        yield _encode_stream_event(
+                            {
+                                "type": "auto_ingest_skipped_retry",
+                                "message": "자동 수집으로 추가된 벡터가 없어 재검색을 생략합니다.",
+                            }
+                        )
 
                 # 4. Generator 완료 스트리밍 (최종 RAG 문서 획득)
                 elif node_name == "generator" and "_latest_agent_event" in node_output:
