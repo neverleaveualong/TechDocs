@@ -20,10 +20,13 @@ def _get_kiwi():
     if _kiwi_instance is None:
         try:
             from kiwipiepy import Kiwi
-            _kiwi_instance = Kiwi()
-            logger.info("Kiwi 형태소 분석기 로드 완료")
+            _kiwi_instance = Kiwi(num_workers=1)
+            logger.info("Kiwi 형태소 분석기 로드 완료 (num_workers=1)")
         except ImportError:
             logger.warning("kiwipiepy 미설치. pip install kiwipiepy 필요.")
+            return None
+        except Exception as e:
+            logger.warning("Kiwi 형태소 분석기 초기화 실패, Fallback 처리: %s", e)
             return None
     return _kiwi_instance
 
