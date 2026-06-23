@@ -51,20 +51,41 @@ def _tokenize_korean(text: str) -> list[str]:
     return tokens
 
 
+# 전역 BM25 캐시 (메모리 누수 방지 및 다중 테넌시 네임스페이스 지원)
+_bm25_cache = {}
+
+def clear_bm25_cache(namespace: Optional[str] = None):
+    ns = namespace or ""
+    global _bm25_cache
+    if ns in _bm25_cache:
+        del _bm25_cache[ns]
+        logger.info("BM25 캐시 클리어 완료 (namespace: %s)", ns)
+    else:
+        _bm25_cache.clear()
+        logger.info("전체 BM25 캐시 클리어 완료")
+
+
 class HybridSearch:
     """BM25 + Vector Hybrid Search with RRF (Reciprocal Rank Fusion)"""
 
     def __init__(self, namespace: Optional[str] = None):
-        self.namespace = namespace
+        self.namespace = namespace or ""
         self._embeddings = get_embeddings()
         pc = Pinecone(api_key=settings.pinecone_api_key)
         self._index = pc.Index(settings.pinecone_index_name)
-        self._bm25_corpus: list[str] = []
-        self._bm25_metadata: list[dict] = []
-        self._bm25: Optional[BM25Okapi] = None
+        
+        # 캐싱된 인덱스가 존재하면 메모리에서 즉시 획득
+        cache_data = _bm25_cache.get(self.namespace, {})
+        self._bm25_corpus = cache_data.get("corpus", [])
+        self._bm25_metadata = cache_data.get("metadata", [])
+        self._bm25 = cache_data.get("bm25", None)
 
     def _build_bm25_index(self):
         """Pinecone에서 문서를 가져와 BM25 인덱스 구축"""
+        # 이미 인덱스가 캐싱되어 있으면 추가 fetch 및 빌드를 스킵
+        if self._bm25 is not None:
+            return
+
         logger.info("BM25 인덱스 구축 중...")
         try:
             all_ids = []
@@ -80,6 +101,11 @@ class HybridSearch:
                 self._bm25_corpus = []
                 self._bm25_metadata = []
                 self._bm25 = BM25Okapi([["빈문서"]])
+                _bm25_cache[self.namespace] = {
+                    "corpus": self._bm25_corpus,
+                    "metadata": self._bm25_metadata,
+                    "bm25": self._bm25
+                }
                 return
 
             self._bm25_corpus = []
@@ -97,11 +123,23 @@ class HybridSearch:
 
             if not self._bm25_corpus:
                 self._bm25 = BM25Okapi([["빈문서"]])
+                _bm25_cache[self.namespace] = {
+                    "corpus": self._bm25_corpus,
+                    "metadata": self._bm25_metadata,
+                    "bm25": self._bm25
+                }
                 return
 
             tokenized = [_tokenize_korean(doc) for doc in self._bm25_corpus]
             self._bm25 = BM25Okapi(tokenized)
-            logger.info(f"BM25 인덱스 구축 완료: {len(self._bm25_corpus)}개 문서")
+            
+            # 빌드 완료 후 메모리에 캐싱
+            _bm25_cache[self.namespace] = {
+                "corpus": self._bm25_corpus,
+                "metadata": self._bm25_metadata,
+                "bm25": self._bm25
+            }
+            logger.info("BM25 인덱스 구축 완료 및 캐싱: %d개 문서", len(self._bm25_corpus))
         except Exception as e:
             logger.exception("BM25 인덱스 빌드 실패, Vector Only 모드로 우회합니다: %s", e)
             self._bm25 = BM25Okapi([["에러"]])

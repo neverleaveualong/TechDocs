@@ -11,6 +11,13 @@ class IngestAgent:
 
         result = await maybe_auto_ingest_for_rag(query, query_plan=query_plan)
 
+        if result.should_retry_search:
+            try:
+                from app.core.hybrid_search import clear_bm25_cache
+                clear_bm25_cache()
+            except Exception as e:
+                pass
+
         return AgentMessage(
             sender="ingest",
             action=AgentAction.INGEST,
