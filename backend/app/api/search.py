@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 
@@ -162,7 +163,23 @@ async def search_stream(request: Request, body: SearchRequest):
             prompt_value = None
 
             # LangGraph updates 스트림 실행
-            async for event in rag_agent_graph.astream(initial_state, config=config, stream_mode="updates"):
+            graph_stream = rag_agent_graph.astream(initial_state, config=config, stream_mode="updates").__aiter__()
+            pending_event = asyncio.create_task(anext(graph_stream))
+            while True:
+                try:
+                    event = await asyncio.wait_for(asyncio.shield(pending_event), timeout=5)
+                except asyncio.TimeoutError:
+                    yield _encode_stream_event(
+                        {
+                            "type": "keepalive",
+                            "elapsed_ms": int((time.time() - start) * 1000),
+                        }
+                    )
+                    continue
+                except StopAsyncIteration:
+                    break
+
+                pending_event = asyncio.create_task(anext(graph_stream))
                 node_name = list(event.keys())[0]
                 node_output = event[node_name]
 

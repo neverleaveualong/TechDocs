@@ -62,7 +62,9 @@ export async function searchPatentsStream(
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      const event = JSON.parse(trimmed) as SearchStreamEvent;
+      const parsed = JSON.parse(trimmed) as { type?: string };
+      if (parsed.type === "keepalive") continue;
+      const event = parsed as SearchStreamEvent;
       if (event.type === "error") {
         throw new Error(event.detail);
       }
@@ -71,7 +73,9 @@ export async function searchPatentsStream(
   }
 
   if (buffer.trim()) {
-    const event = JSON.parse(buffer) as SearchStreamEvent;
+    const parsed = JSON.parse(buffer) as { type?: string };
+    if (parsed.type === "keepalive") return;
+    const event = parsed as SearchStreamEvent;
     if (event.type === "error") {
       throw new Error(event.detail);
     }
