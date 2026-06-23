@@ -680,31 +680,9 @@ async def _save_claimlens_patents(patents: list[PatentItem]) -> tuple[int, int, 
 
 
 def _cached_result(query: str, mode: str) -> AutoIngestResult | None:
-    cutoff = _now() - timedelta(days=settings.auto_ingest_cache_ttl_days)
-    with SessionLocal() as db:
-        row = (
-            db.query(AutoIngestCache)
-            .filter(AutoIngestCache.query_hash == _query_hash(query, mode))
-            .filter(AutoIngestCache.last_ingested_at >= cutoff)
-            # 수집 결과가 0건인 과거 실패/빈 기록(no_data, low_relevance)은 cached 재활용에서 배제하여 락인을 예방
-            .filter(AutoIngestCache.status.in_(["success", "no_claims"]))
-            .filter(AutoIngestCache.patents_saved > 0)
-            .order_by(AutoIngestCache.last_ingested_at.desc())
-            .first()
-        )
-        if not row:
-            return None
-        return AutoIngestResult(
-            status="cached",
-            mode=mode,
-            kipris_calls_used=0,
-            patents_found=row.patents_found,
-            patents_saved=row.patents_saved,
-            rag_vectors_stored=row.rag_vectors_stored,
-            claimlens_patents_saved=row.claimlens_patents_saved,
-            agent_vectors_stored=row.agent_vectors_stored,
-            message="최근 같은 검색어로 자동 수집한 기록이 있어 KIPRIS를 다시 호출하지 않았습니다.",
-        )
+    # 기능 고도화 및 개발 단계에서는 수집 캐싱 기능을 비활성화하여
+    # 매 검색 시마다 KIPRIS 실시간 수집 및 필터링 로직이 즉시 반영되도록 처리합니다.
+    return None
 
 
 def _within_budget(expected_calls: int = 1) -> tuple[bool, str]:
