@@ -33,7 +33,7 @@ export default function SearchResults({ sources }: SearchResultsProps) {
             {sources.length}건 사용
           </span>
         </div>
-        <div className="space-y-3 bg-gray-50/70 p-3 sm:p-4">
+        <div className="space-y-2 bg-gray-50/70 p-2.5 sm:p-3">
           {sources.map((source, idx) => (
             <PatentCard
               key={`${source.application_number}-${idx}`}

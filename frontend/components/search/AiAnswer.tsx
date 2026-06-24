@@ -69,14 +69,14 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
               components={{
                 h3({ node, children, ...props }) {
                   return (
-                    <h3 className="text-[14px] sm:text-[15px] font-black text-slate-900 mt-5.5 mb-2.5 flex items-center border-l-4 border-teal-500 pl-2.5 leading-5" {...props}>
+                    <h3 className="text-[13.5px] sm:text-[14.5px] font-black text-slate-900 mt-4 mb-1.5 flex items-center border-l-4 border-teal-500 pl-2 leading-5" {...props}>
                       {children}
                     </h3>
                   );
                 },
                 ul({ node, children, ...props }) {
                   return (
-                    <ul className="list-none pl-1.5 my-2.5 space-y-1.5 text-slate-700 font-medium" {...props}>
+                    <ul className="list-none pl-1.5 my-1.5 space-y-1 text-slate-700 font-medium" {...props}>
                       {children}
                     </ul>
                   );
@@ -95,7 +95,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                   
                   if (isIntro) {
                     return (
-                      <div className="bg-gradient-to-r from-teal-500/[0.04] to-teal-500/[0.08] border border-teal-150 rounded-xl p-4 sm:p-4.5 text-teal-950 font-bold leading-relaxed text-[13px] sm:text-[14px] mb-5.5 shadow-inner-sm flex gap-3">
+                      <div className="bg-gradient-to-r from-teal-500/[0.04] to-teal-500/[0.08] border border-teal-150 rounded-xl p-4 sm:p-4.5 text-teal-950 font-bold leading-relaxed text-[13px] sm:text-[14px] mb-4 shadow-inner-sm flex gap-3">
                         <div className="w-8 h-8 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-600 shrink-0 select-none">
                           <i className="ri-chat-check-line text-base" />
                         </div>
@@ -107,7 +107,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                     );
                   }
                   return (
-                    <p className="my-2.5 text-slate-700 leading-normal text-[13px] sm:text-[14px] font-medium" {...props}>
+                    <p className="my-1.5 text-slate-700 leading-normal text-[13px] sm:text-[14px] font-medium" {...props}>
                       {children}
                     </p>
                   );
