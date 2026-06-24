@@ -837,7 +837,9 @@ function buildClaimLensSummary(events: ClaimLensEvent[], candidates: unknown[], 
 }
 
 function formatScore(value: unknown) {
-  return typeof value === "number" ? value.toFixed(3) : "-";
+  if (typeof value !== "number") return "-";
+  const percentage = Math.min(Math.round((value / 0.03278) * 100), 100);
+  return `${percentage}%`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

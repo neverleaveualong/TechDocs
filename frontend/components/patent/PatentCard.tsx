@@ -15,7 +15,8 @@ function formatDate(value: string) {
 
 function formatScore(score?: number | null) {
   if (typeof score !== "number") return "-";
-  return score.toFixed(3);
+  const percentage = Math.min(Math.round((score / 0.03278) * 100), 100);
+  return `${percentage}%`;
 }
 
 function MetaRow({
@@ -58,7 +59,7 @@ export default function PatentCard({ patent, index, onOpen }: PatentCardProps) {
 
         <div className="shrink-0 rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-2.5 text-center shadow-sm">
           <p className="font-mono text-2xl font-black leading-none text-blue-900">{formatScore(patent.score)}</p>
-          <p className="mt-1 text-[11px] font-extrabold text-blue-700 tracking-wide">관련도</p>
+          <p className="mt-1 text-[11px] font-extrabold text-blue-700 tracking-wide">매칭 유사도</p>
         </div>
       </div>
 

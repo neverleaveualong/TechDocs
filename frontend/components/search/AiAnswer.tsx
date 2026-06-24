@@ -28,9 +28,11 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
     }
   };
 
-  // [출처: XXXXXXX] 또는 [출처: XX-XXXX-XXXXXXX] 형식을 찾아서 `[출처: XXXXXXX]` 백틱 인라인 코드로 변환하여
-  // ReactMarkdown 내에서 커스텀 렌더링이 작동하도록 전처리합니다.
-  const formattedAnswer = answer.replace(/\[출처:\s*([a-zA-Z0-9-]+)\]/g, "`[출처: $1]`");
+  // 1단계: [출처: XXXXXXX] 또는 [출처: XX-XXXX-XXXXXXX] 형식을 찾아서 `[출처: XXXXXXX]` 백틱 인라인 코드로 변환
+  let formatted = answer.replace(/\[출처:\s*([a-zA-Z0-9-]+)\]/g, "`[출처: $1]`");
+  // 2단계: 괄호나 '출처:' 텍스트 없이 단독으로 노출된 13자리 특허/실용신안 출원번호를 감지하여 강제 배지화 (단, 정보 항목인 '출원번호:' 접두사 뒤는 제외)
+  formatted = formatted.replace(/(?<!출원번호\s*:\s*)\b(10\d{11}|20\d{11}|10-\d{4}-\d{7}|20-\d{4}-\d{7})\b/g, "`[출처: $1]`");
+  const formattedAnswer = formatted;
 
   return (
     <div className="animate-fade-in bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
