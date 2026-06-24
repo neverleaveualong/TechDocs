@@ -29,6 +29,9 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
   };
 
   const formattedAnswer = answer;
+  const hasConclusion = formattedAnswer.includes("### 결론");
+  const bodyText = hasConclusion ? formattedAnswer.split("### 결론")[0] : formattedAnswer;
+  const conclusionText = hasConclusion ? formattedAnswer.split("### 결론")[1] : "";
 
   return (
     <div className="animate-fade-in bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm transition hover:shadow-md">
@@ -66,28 +69,45 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
               components={{
                 h3({ node, children, ...props }) {
                   return (
-                    <h3 className="text-[15px] sm:text-[16px] font-black text-slate-900 mt-7 mb-3.5 flex items-center border-l-4 border-teal-500 pl-3 leading-6" {...props}>
+                    <h3 className="text-[14px] sm:text-[15px] font-black text-slate-900 mt-5.5 mb-2.5 flex items-center border-l-4 border-teal-500 pl-2.5 leading-5" {...props}>
                       {children}
                     </h3>
                   );
                 },
                 ul({ node, children, ...props }) {
                   return (
-                    <ul className="list-disc pl-5 my-4 space-y-2 text-slate-700 font-medium" {...props}>
+                    <ul className="list-none pl-1.5 my-2.5 space-y-1.5 text-slate-700 font-medium" {...props}>
                       {children}
                     </ul>
                   );
                 },
                 li({ node, children, ...props }) {
                   return (
-                    <li className="text-slate-700 leading-relaxed text-[13.5px] sm:text-[14.5px]" {...props}>
+                    <li className="relative pl-4 text-slate-700 leading-normal text-[13px] sm:text-[14px]" {...props}>
+                      <span className="absolute left-0 top-[6.5px] w-1.5 h-1.5 rounded-full bg-teal-500 select-none" />
                       {children}
                     </li>
                   );
                 },
                 p({ node, children, ...props }) {
+                  const textContent = String(children);
+                  const isIntro = textContent.includes("사용자 질의") || textContent.includes("KIPRIS");
+                  
+                  if (isIntro) {
+                    return (
+                      <div className="bg-gradient-to-r from-teal-500/[0.04] to-teal-500/[0.08] border border-teal-150 rounded-xl p-4 sm:p-4.5 text-teal-950 font-bold leading-relaxed text-[13px] sm:text-[14px] mb-5.5 shadow-inner-sm flex gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-600 shrink-0 select-none">
+                          <i className="ri-chat-check-line text-base" />
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-teal-800 text-[10px] mb-0.5 uppercase tracking-wider select-none">검색 브리핑 요약</p>
+                          <p className="leading-relaxed font-semibold text-slate-800">{children}</p>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
-                    <p className="my-3 text-slate-700 leading-relaxed text-[13.5px] sm:text-[14.5px] font-medium" {...props}>
+                    <p className="my-2.5 text-slate-700 leading-normal text-[13px] sm:text-[14px] font-medium" {...props}>
                       {children}
                     </p>
                   );
@@ -101,10 +121,36 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                 }
               }}
             >
-              {formattedAnswer || (isStreaming ? "" : "답변을 생성하고 있습니다...")}
+              {bodyText || (isStreaming ? "" : "답변을 생성하고 있습니다...")}
             </ReactMarkdown>
           </div>
         </div>
+
+        {conclusionText && (
+          <div className="mt-6 p-5 sm:p-5.5 bg-gradient-to-br from-emerald-50/45 via-teal-50/20 to-teal-50/40 border border-emerald-100/70 rounded-2xl shadow-sm">
+            <h4 className="text-[13px] sm:text-[14px] font-black text-emerald-950 mb-2.5 flex items-center gap-2 select-none">
+              <div className="w-6.5 h-6.5 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                <i className="ri-lightbulb-line text-sm" />
+              </div>
+              종합 결론 및 활용 조언
+            </h4>
+            <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed">
+              <ReactMarkdown
+                components={{
+                  p({ node, children, ...props }) {
+                    return (
+                      <p className="text-slate-700 leading-relaxed text-[13px] sm:text-[14px] font-semibold" {...props}>
+                        {children}
+                      </p>
+                    );
+                  }
+                }}
+              >
+                {conclusionText}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Feedback buttons */}
