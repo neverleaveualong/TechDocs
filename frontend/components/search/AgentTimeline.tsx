@@ -304,7 +304,7 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
                 </span>
                 {bestScore !== undefined && (
                   <span className="font-mono text-[10px] text-gray-500">
-                    최고 관련도 점수: <strong className="text-gray-700">{bestScore.toFixed(4)}</strong>
+                    최고 관련도 점수: <strong className="text-gray-700">{Math.min(Math.round((bestScore / 0.03278) * 100), 100)}%</strong>
                   </span>
                 )}
               </div>
