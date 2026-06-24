@@ -31,33 +31,76 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
   const formattedAnswer = answer;
 
   return (
-    <div className="animate-fade-in bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-      <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+    <div className="animate-fade-in bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm transition hover:shadow-md">
+      <div className="px-5 sm:px-6 py-4.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm">
-            <i className="ri-robot-line text-white text-xs" />
+          <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+            <i className="ri-robot-line text-white text-sm" />
           </div>
-          <span className="text-sm font-bold text-gray-900">AI 분석 결과</span>
+          <div>
+            <span className="text-sm font-black text-gray-900 block leading-tight">AI 분석 결과</span>
+            <span className="text-[10px] text-gray-400 font-semibold mt-0.5 block sm:hidden">RAG · GPT-4o-mini</span>
+          </div>
           {isStreaming && (
-            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-teal-50 text-teal-600 rounded font-medium border border-teal-100 animate-pulse">
+            <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 bg-teal-50 text-teal-700 rounded-full font-bold border border-teal-100 animate-pulse ml-1.5">
               <i className="ri-loader-4-line animate-spin text-[9px]" />
-              답변 생성 중
+              실시간 분석 중
             </span>
           )}
         </div>
         <div className="hidden sm:flex items-center gap-2">
-          <span className="text-[10px] px-2 py-0.5 bg-teal-50 text-teal-600 rounded font-medium border border-teal-100">RAG</span>
-          <span className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-500 rounded font-medium border border-gray-100 font-mono">GPT-4o-mini</span>
+          <span className="text-[10px] px-2.5 py-1 bg-teal-50 text-teal-700 rounded-lg font-black border border-teal-100">RAG</span>
+          <span className="text-[10px] px-2.5 py-1 bg-gray-50 text-gray-500 rounded-lg font-bold border border-gray-100 font-mono">GPT-4o-mini</span>
         </div>
       </div>
 
-      <div className="px-5 sm:px-6 py-5 bg-slate-55/20">
-        <p className="text-[11px] text-gray-400 mb-4 border-l-2 border-gray-200 pl-2">
-          검색 기술 질의: &ldquo;{query}&rdquo;
-        </p>
-        <div className="prose prose-slate max-w-none text-slate-800 text-[13.5px] sm:text-[14.5px] leading-8 prose-p:my-4 prose-headings:mt-6 prose-headings:mb-3 prose-headings:text-slate-900 prose-headings:font-black prose-li:my-1.5 prose-strong:font-black whitespace-pre-wrap">
+      <div className="px-5 sm:px-6 py-6 bg-slate-50/30">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100/80 border border-slate-200/60 rounded-lg text-xs font-extrabold text-slate-700 mb-5 select-none">
+          <i className="ri-search-2-line text-slate-500" />
+          <span>질의어: {query}</span>
+        </div>
+        
+        <div className="prose prose-slate max-w-none text-slate-800 whitespace-pre-wrap leading-relaxed">
           <div className={isStreaming ? "after:content-['▋'] after:ml-0.5 after:animate-pulse after:text-teal-500" : ""}>
-            <ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                h3({ node, children, ...props }) {
+                  return (
+                    <h3 className="text-[15px] sm:text-[16px] font-black text-slate-900 mt-7 mb-3.5 flex items-center border-l-4 border-teal-500 pl-3 leading-6" {...props}>
+                      {children}
+                    </h3>
+                  );
+                },
+                ul({ node, children, ...props }) {
+                  return (
+                    <ul className="list-disc pl-5 my-4 space-y-2 text-slate-700 font-medium" {...props}>
+                      {children}
+                    </ul>
+                  );
+                },
+                li({ node, children, ...props }) {
+                  return (
+                    <li className="text-slate-700 leading-relaxed text-[13.5px] sm:text-[14.5px]" {...props}>
+                      {children}
+                    </li>
+                  );
+                },
+                p({ node, children, ...props }) {
+                  return (
+                    <p className="my-3 text-slate-700 leading-relaxed text-[13.5px] sm:text-[14.5px] font-medium" {...props}>
+                      {children}
+                    </p>
+                  );
+                },
+                strong({ node, children, ...props }) {
+                  return (
+                    <strong className="font-extrabold text-slate-900 mr-1" {...props}>
+                      {children}
+                    </strong>
+                  );
+                }
+              }}
+            >
               {formattedAnswer || (isStreaming ? "" : "답변을 생성하고 있습니다...")}
             </ReactMarkdown>
           </div>
