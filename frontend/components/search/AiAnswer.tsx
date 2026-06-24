@@ -28,11 +28,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
     }
   };
 
-  // 1단계: [출처: XXXXXXX] 또는 [출처: XX-XXXX-XXXXXXX] 형식을 찾아서 `[출처: XXXXXXX]` 백틱 인라인 코드로 변환
-  let formatted = answer.replace(/\[출처:\s*([a-zA-Z0-9-]+)\]/g, "`[출처: $1]`");
-  // 2단계: 괄호나 '출처:' 텍스트 없이 단독으로 노출된 13자리 특허/실용신안 출원번호를 감지하여 강제 배지화 (단, 정보 항목인 '출원번호:' 접두사 뒤는 제외)
-  formatted = formatted.replace(/(?<!출원번호\s*:\s*)\b(10\d{11}|20\d{11}|10-\d{4}-\d{7}|20-\d{4}-\d{7})\b/g, "`[출처: $1]`");
-  const formattedAnswer = formatted;
+  const formattedAnswer = answer;
 
   return (
     <div className="animate-fade-in bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -61,29 +57,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
         </p>
         <div className="prose prose-slate max-w-none text-slate-800 text-[13.5px] sm:text-[14.5px] leading-8 prose-p:my-4 prose-headings:mt-6 prose-headings:mb-3 prose-headings:text-slate-900 prose-headings:font-black prose-li:my-1.5 prose-strong:font-black whitespace-pre-wrap">
           <div className={isStreaming ? "after:content-['▋'] after:ml-0.5 after:animate-pulse after:text-teal-500" : ""}>
-            <ReactMarkdown
-              components={{
-                code({ node, className, children, ...props }) {
-                  const content = String(children);
-                  const isCitation = content.startsWith("[출처:");
-                  
-                  if (isCitation) {
-                    const patentNum = content.replace("[출처:", "").replace("]", "").trim();
-                    return (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 border border-teal-150 px-2.5 py-0.5 text-[11px] font-bold text-teal-700 mx-0.5 select-all hover:bg-teal-100 hover:border-teal-300 transition-colors shadow-sm cursor-help" title="클릭 시 특허 번호 드래그 복사 가능">
-                        <i className="ri-file-list-3-line text-[10px] text-teal-600" />
-                        {patentNum}
-                      </span>
-                    );
-                  }
-                  return (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                }
-              }}
-            >
+            <ReactMarkdown>
               {formattedAnswer || (isStreaming ? "" : "답변을 생성하고 있습니다...")}
             </ReactMarkdown>
           </div>
