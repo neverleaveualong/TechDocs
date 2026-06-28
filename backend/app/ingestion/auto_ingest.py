@@ -680,13 +680,46 @@ async def _save_claimlens_patents(patents: list[PatentItem]) -> tuple[int, int, 
 
 
 def _cached_result(query: str, mode: str) -> AutoIngestResult | None:
-    # 기능 고도화 및 개발 단계에서는 수집 캐싱 기능을 비활성화하여
-    # 매 검색 시마다 KIPRIS 실시간 수집 및 필터링 로직이 즉시 반영되도록 처리합니다.
-    return None
+    cutoff = _now() - timedelta(days=settings.auto_ingest_cache_ttl_days)
+    with SessionLocal() as db:
+        row = (
+            db.query(AutoIngestCache)
+            .filter(AutoIngestCache.query_hash == _query_hash(query, mode))
+            .filter(AutoIngestCache.last_ingested_at >= cutoff)
+            # 수집 결과가 0건인 과거 실패/빈 기록(no_data, low_relevance)은 cached 재활용에서 배제하여 락인을 예방
+            .filter(AutoIngestCache.status.in_(["success", "no_claims"]))
+            .filter(AutoIngestCache.patents_saved > 0)
+            .order_by(AutoIngestCache.last_ingested_at.desc())
+            .first()
+        )
+        if not row:
+            return None
+        return AutoIngestResult(
+            status="cached",
+            mode=mode,
+            kipris_calls_used=0,
+            patents_found=row.patents_found,
+            patents_saved=row.patents_saved,
+            rag_vectors_stored=row.rag_vectors_stored,
+            claimlens_patents_saved=row.claimlens_patents_saved,
+            agent_vectors_stored=row.agent_vectors_stored,
+            message="최근 같은 검색어로 자동 수집한 기록이 있어 KIPRIS를 다시 호출하지 않았습니다.",
+        )
 
 
 def _within_budget(expected_calls: int = 1) -> tuple[bool, str]:
-    # 캐시 기능 비활성화로 인해 DB 예산 조회를 건너뛰고 항상 허용합니다.
+    now = _now()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    with SessionLocal() as db:
+        daily_calls = _sum_calls_since(db, day_start)
+        monthly_calls = _sum_calls_since(db, month_start)
+
+    if daily_calls + expected_calls > settings.auto_ingest_max_daily_calls:
+        return False, "오늘 자동 수집 KIPRIS 호출 한도에 도달했습니다."
+    if monthly_calls + expected_calls > settings.auto_ingest_max_monthly_calls:
+        return False, "이번 달 자동 수집 KIPRIS 호출 한도에 도달했습니다."
     return True, ""
 
 
@@ -700,8 +733,29 @@ def _sum_calls_since(db, since: datetime) -> int:
 
 
 def _record_result(query: str, result: AutoIngestResult) -> None:
-    # 캐시 기능 비활성화로 인해 DB 캐시 기록을 하지 않고 즉시 리턴합니다.
-    return
+    now = _now()
+    try:
+        with SessionLocal() as db:
+            db.add(
+                AutoIngestCache(
+                    query_hash=_query_hash(query, result.mode),
+                    normalized_query=_normalize_query(query),
+                    mode=result.mode,
+                    status=result.status,
+                    kipris_calls_used=result.kipris_calls_used,
+                    patents_found=result.patents_found,
+                    patents_saved=result.patents_saved,
+                    rag_vectors_stored=result.rag_vectors_stored,
+                    claimlens_patents_saved=result.claimlens_patents_saved,
+                    agent_vectors_stored=result.agent_vectors_stored,
+                    error_message=result.message if result.status == "error" else None,
+                    created_at=now,
+                    last_ingested_at=now,
+                )
+            )
+            db.commit()
+    except Exception:
+        logger.exception("Failed to record auto ingest cache for %s", query)
 
 
 def _query_hash(query: str, mode: str) -> str:
