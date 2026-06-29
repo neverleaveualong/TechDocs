@@ -517,8 +517,13 @@ function ClaimLensResult({
           <p className="mt-1.5 text-sm font-bold text-gray-800 leading-6">&ldquo;{query}&rdquo;</p>
         </div>
 
-        <div className="border-t border-gray-50 pt-5">
+        <div className="border-t border-gray-50 pt-5 space-y-6">
           <AgentProgressTimeline events={events} />
+          {events.length > 0 && (
+            <div className="border-t border-gray-100 pt-5">
+              <AgentTimeline events={transformClaimLensEvents(events)} />
+            </div>
+          )}
         </div>
       </div>
     );
