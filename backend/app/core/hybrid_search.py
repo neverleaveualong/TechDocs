@@ -21,7 +21,7 @@ def _get_kiwi():
     # 100% 원천 차단하기 위해 Kiwi C++ 형태소 분석기 로딩을 비활성화하고 정규식 토큰화로 안전하게 우회합니다.
     return None
 
-def _clean_korean_josa(word: str) -> str:
+def clean_korean_josa(word: str) -> str:
     # 한글 조사 목록 (긴 조사부터 순서대로 매칭하여 오인칭 방지)
     josa_list = [
         '으로써', '으로서', '으로부터', '조차도', '만으로', '에게서',
@@ -36,7 +36,7 @@ def _clean_korean_josa(word: str) -> str:
                 return stemmed
     return word
 
-def _tokenize_korean(text: str) -> list[str]:
+def tokenize_korean(text: str) -> list[str]:
     """한국어 조사 제거 형태소 원형 근사 + 영문 토큰화
     C++ Kiwi 모듈을 사용하지 않고 순수 파이썬 정규식 및 조사 필터링을 사용하여
     서버 락과 OOM 위험이 없으면서도 BM25 키워드 일치율을 비약적으로 끌어올립니다.
@@ -44,7 +44,7 @@ def _tokenize_korean(text: str) -> list[str]:
     raw_tokens = re.findall(r'[가-힣0-9a-zA-Z]+', text.lower())
     tokens = []
     for token in raw_tokens:
-        cleaned = _clean_korean_josa(token)
+        cleaned = clean_korean_josa(token)
         tokens.append(cleaned)
         if cleaned != token:
             tokens.append(token)
@@ -136,7 +136,7 @@ class HybridSearch:
                 }
                 return
 
-            tokenized = [_tokenize_korean(doc) for doc in self._bm25_corpus]
+            tokenized = [tokenize_korean(doc) for doc in self._bm25_corpus]
             self._bm25 = BM25Okapi(tokenized)
             
             # 빌드 완료 후 메모리에 캐싱
@@ -173,26 +173,82 @@ class HybridSearch:
         return docs
 
     def _bm25_search(self, query: str, top_k: int = 20) -> list[dict]:
-        """BM25 (키워드) 검색"""
-        if self._bm25 is None:
-            self._build_bm25_index()
+        """BM25 (키워드) 검색 - SQLite FTS5 기반 고속 검색"""
+        from app.db.database import is_sqlite, SessionLocal
+        from sqlalchemy import text
 
-        tokenized_query = _tokenize_korean(query)
-        scores = self._bm25.get_scores(tokenized_query)
+        if not is_sqlite:
+            # SQLite가 아닐 경우 기존 인메모리 빌드 방식으로 Fallback
+            if self._bm25 is None:
+                self._build_bm25_index()
 
-        # 상위 top_k개 인덱스
-        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+            tokenized_query = tokenize_korean(query)
+            if not tokenized_query:
+                return []
+            scores = self._bm25.get_scores(tokenized_query)
+
+            # 상위 top_k개 인덱스
+            top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+
+            docs = []
+            for idx in top_indices:
+                if scores[idx] <= 0:
+                    continue
+                docs.append({
+                    "page_content": self._bm25_corpus[idx],
+                    "metadata": self._bm25_metadata[idx],
+                    "score": float(scores[idx]),
+                    "rank": 0,
+                })
+            return docs
+
+        tokenized_query = tokenize_korean(query)
+        if not tokenized_query:
+            return []
+
+        # FTS5 MATCH 쿼리를 위한 단어 조합 (공백 기준 AND 검색)
+        fts_query = " ".join([f'"{tok}"' for tok in tokenized_query])
 
         docs = []
-        for idx in top_indices:
-            if scores[idx] <= 0:
-                continue
-            docs.append({
-                "page_content": self._bm25_corpus[idx],
-                "metadata": self._bm25_metadata[idx],
-                "score": float(scores[idx]),
-                "rank": 0,
-            })
+        with SessionLocal() as db:
+            try:
+                # FTS5 bm25() 점수는 음수가 작을수록(DESC 정렬 시 뒤쪽, 즉 ASC 정렬 시 앞쪽) 연관성이 높은 순위
+                result = db.execute(
+                    text("""
+                        SELECT 
+                            application_number, title, abstract, 
+                            applicant_name, register_status, application_date, 
+                            ipc_number, page_content, bm25(patent_fts) as score
+                        FROM patent_fts
+                        WHERE patent_fts MATCH :query
+                        ORDER BY score ASC
+                        LIMIT :top_k
+                    """),
+                    {"query": fts_query, "top_k": top_k}
+                )
+
+                for row in result:
+                    raw_score = float(row.score) if row.score is not None else 0.0
+                    # RRF는 순위(rank)만 사용하므로 score 값 자체는 부호만 전환하여 보관
+                    score_val = -raw_score
+                    
+                    docs.append({
+                        "page_content": row.page_content,
+                        "metadata": {
+                            "application_number": row.application_number,
+                            "application_date": row.application_date,
+                            "register_status": row.register_status,
+                            "applicant_name": row.applicant_name,
+                            "invention_title": row.title,
+                            "ipc_number": row.ipc_number,
+                            "source": "kipris",
+                        },
+                        "score": score_val,
+                        "rank": 0
+                    })
+            except Exception as e:
+                logger.error("SQLite FTS5 BM25 검색 중 오류 발생, 빈 목록 반환: %s", e)
+
         return docs
 
     def search(

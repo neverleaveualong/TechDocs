@@ -38,3 +38,24 @@ def init_db():
     from app.models.auto_ingest import AutoIngestCache
     
     Base.metadata.create_all(bind=engine)
+    
+    # SQLite인 경우 FTS5 전체 텍스트 검색 가상 테이블 생성
+    if is_sqlite:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            # 스키마 고도화를 위해 기존 구버전 가상 테이블이 있을 경우 재생성
+            conn.execute(text("DROP TABLE IF EXISTS patent_fts;"))
+            conn.execute(text("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS patent_fts USING fts5(
+                    application_number,
+                    title,
+                    abstract,
+                    applicant_name,
+                    register_status,
+                    application_date,
+                    ipc_number,
+                    page_content,
+                    tokenize='unicode61'
+                );
+            """))
+

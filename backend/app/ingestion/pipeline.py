@@ -4,11 +4,13 @@ from app.config import settings
 from app.core.claimlens.claim_parser import normalize_application_number, parse_claims
 from app.core.claimlens.vector_search import ClaimLensVectorIndex, ClaimVectorDocument
 from app.core.vectorstore import add_documents
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, is_sqlite
 from app.ingestion.document_loader import patents_to_documents
 from app.ingestion.kipris_client import kipris_client
 from app.ingestion.text_splitter import get_text_splitter
 from app.models.claimlens import ClaimLensClaim, ClaimLensClaimElement, ClaimLensPatent
+from app.core.hybrid_search import tokenize_korean
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,51 @@ async def ingest_patents(
     text_splitter = get_text_splitter()
     chunks = text_splitter.split_documents(documents)
     rag_count = add_documents(chunks, namespace=settings.rag_namespace)
+
+    # SQLite FTS5 테이블에 고속 키워드 검색용 데이터 백업 및 형태소 역색인 저장
+    if is_sqlite and chunks:
+        app_nums = list(set([chunk.metadata.get("application_number") for chunk in chunks if chunk.metadata.get("application_number")]))
+        with SessionLocal() as db:
+            try:
+                # 1. 중복 유입 방지를 위해 기존 동일 특허 청크 데이터 일괄 삭제
+                for app_num in app_nums:
+                    db.execute(text("DELETE FROM patent_fts WHERE application_number = :app_num"), {"app_num": app_num})
+                
+                # 2. 형태소 단위로 조사 제거된 문자열을 FTS5에 적재
+                for chunk in chunks:
+                    app_num = chunk.metadata.get("application_number", "")
+                    title = chunk.metadata.get("invention_title", "")
+                    tokenized_content = " ".join(tokenize_korean(chunk.page_content))
+                    
+                    db.execute(
+                        text("""
+                            INSERT INTO patent_fts (
+                                application_number, title, abstract, 
+                                applicant_name, register_status, application_date, 
+                                ipc_number, page_content
+                            )
+                            VALUES (
+                                :app_num, :title, :abstract, 
+                                :applicant_name, :register_status, :application_date, 
+                                :ipc_number, :page_content
+                            )
+                        """),
+                        {
+                            "app_num": app_num,
+                            "title": title,
+                            "abstract": chunk.metadata.get("abstract", "") or "",
+                            "applicant_name": chunk.metadata.get("applicant_name", "") or "",
+                            "register_status": chunk.metadata.get("register_status", "") or "",
+                            "application_date": chunk.metadata.get("application_date", "") or "",
+                            "ipc_number": chunk.metadata.get("ipc_number", "") or "",
+                            "page_content": tokenized_content
+                        }
+                    )
+                db.commit()
+                logger.info("Successfully indexed %d chunks in SQLite FTS5 for %d patents", len(chunks), len(app_nums))
+            except Exception as e:
+                db.rollback()
+                logger.error("Failed to save chunks to SQLite FTS5: %s", e)
 
     claimlens_saved_count = 0
     agent_vector_count = 0
