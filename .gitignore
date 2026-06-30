@@ -30,3 +30,10 @@ docs/RAG_CONCEPTS.md
 docs/CORE_CODE_TEMPLATES.md
 docs/PHASE0_GUIDE.md
 SETUP_PLAN.md
+
+# Database
+*.db
+database.db
+
+# PR Bodies
+.pr-body*
