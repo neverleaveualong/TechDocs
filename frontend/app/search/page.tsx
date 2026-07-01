@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import SearchBar from "@/components/search/SearchBar";
 import AiAnswer from "@/components/search/AiAnswer";
@@ -43,6 +43,45 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const searchRunRef = useRef(0);
+
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  // 1. 오케스트레이션 타임라인 활성화 시 해당 영역의 가장 하단까지 자동 스크롤
+  useEffect(() => {
+    const hasEvents = ragEvents.length > 0 || claimLensEvents.length > 0;
+    if (isLoading && hasEvents) {
+      setTimeout(() => {
+        timelineRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 100);
+    }
+  }, [ragEvents.length, claimLensEvents.length, isLoading]);
+
+  // 2. 검색 결과가 나오면 결과 영역으로 자동 스크롤
+  const hasScrolledToResult = useRef(false);
+  const hasReport = claimLensEvents.some((event) => event.type === "final_report");
+  useEffect(() => {
+    const hasResult = streamedAnswer || streamedSources.length > 0 || hasReport;
+    if (!isLoading && hasResult) {
+      if (!hasScrolledToResult.current) {
+        setTimeout(() => {
+          resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+        hasScrolledToResult.current = true;
+      }
+    } else {
+      if (isLoading) {
+        hasScrolledToResult.current = false;
+      }
+    }
+  }, [streamedAnswer, streamedSources.length, hasReport, isLoading]);
+
+  // 3. 답변 스트리밍 중 글자 수 증가에 맞춰 스크롤을 실시간으로 하단으로 동기화
+  useEffect(() => {
+    if (isStreaming && streamedAnswer) {
+      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [streamedAnswer, isStreaming]);
 
   const handleSearch = async (query: string) => {
     abortRef.current?.abort();
@@ -231,11 +270,14 @@ export default function SearchPage() {
           {mode === "rag" && (streamedAnswer || streamedSources.length > 0 || ragEvents.length > 0) && (
             <div className="space-y-4 animate-fade-in">
               <AgentTimeline events={ragEvents} />
+              <div ref={timelineRef} className="h-6" />
               {(streamedAnswer || streamedSources.length > 0) && (
-                <>
-                  <AiAnswer answer={streamedAnswer} query={activeQuery} queryLogId={queryLogId} isStreaming={isStreaming} />
+                <div className="space-y-4">
+                  <div ref={resultRef}>
+                    <AiAnswer answer={streamedAnswer} query={activeQuery} queryLogId={queryLogId} isStreaming={isStreaming} />
+                  </div>
                   <SearchResults sources={streamedSources} />
-                </>
+                </div>
               )}
               <AutoIngestDebugPanel events={ragEvents} />
               {(streamedAnswer || streamedSources.length > 0) && (
@@ -252,20 +294,24 @@ export default function SearchPage() {
           )}
 
           {mode === "claimlens" && (claimLensEvents.length > 0 || isLoading) && (
-            <ClaimLensResult
-              query={activeQuery}
-              events={claimLensEvents}
-              isLoading={isLoading}
-              features={features}
-              candidates={candidates}
-              chartRows={chartRows}
-              reportMarkdown={String(report?.data?.markdown ?? "")}
-              onStop={() => abortRef.current?.abort()}
-              onReset={() => {
-                setClaimLensEvents([]);
-                setError(null);
-              }}
-            />
+            <div>
+              {!isLoading && <div ref={resultRef} />}
+              <ClaimLensResult
+                query={activeQuery}
+                events={claimLensEvents}
+                isLoading={isLoading}
+                features={features}
+                candidates={candidates}
+                chartRows={chartRows}
+                reportMarkdown={String(report?.data?.markdown ?? "")}
+                onStop={() => abortRef.current?.abort()}
+                onReset={() => {
+                  setClaimLensEvents([]);
+                  setError(null);
+                }}
+              />
+              <div ref={timelineRef} className="h-6" />
+            </div>
           )}
         </div>
 

@@ -334,12 +334,9 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
               {/* 타임라인 바디 */}
               <div className="pl-3.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-gray-800 tracking-tight">{title}</span>
-                  {friendlyBadge && (
-                    <span className="rounded bg-gray-50 px-1.5 py-0.5 text-[8.5px] font-bold text-gray-500 border border-gray-200/60 tracking-wider">
-                      {friendlyBadge}
-                    </span>
-                  )}
+                  <span className="text-xs font-bold text-gray-800 tracking-tight">
+                    {friendlyBadge ? `${friendlyBadge} - ${title.startsWith(friendlyBadge) ? title.replace(friendlyBadge, "").trim() : title}` : title}
+                  </span>
                   {isActiveNode && (
                     <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-1.5 py-0.5 text-[8px] font-bold text-teal-600 border border-teal-150 animate-pulse">
                       <span className="h-1 w-1 rounded-full bg-teal-500" />
