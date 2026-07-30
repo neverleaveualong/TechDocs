@@ -4,14 +4,14 @@
 - 작성자: Woohyun Sim
 - 목적: 로컬 실행에 필요한 환경, 필수 환경변수, CI 검증 범위를 정리합니다.
 
-## 실행 환경
+## 1. 실행 환경
 
 - Python: `3.12`
 - Node.js: `20 이상`
 - Database: PostgreSQL
 - 선택 실행 방식: Docker Compose
 
-## 로컬 실행
+## 2. 로컬 실행
 
 - 백엔드:
   - `cd backend`
@@ -30,7 +30,7 @@
   - 백엔드: `http://localhost:8000`
   - 프론트엔드: `http://localhost:3000`
 
-## 필수 환경변수
+## 3. 필수 환경변수
 
 | Variable | Purpose |
 | --- | --- |
@@ -42,7 +42,7 @@
 | `FRONTEND_URL` | 백엔드 CORS 허용 주소 |
 | `NEXT_PUBLIC_API_URL` | 프론트엔드가 호출할 백엔드 주소 |
 
-## 주요 선택 환경변수
+## 4. 주요 선택 환경변수
 
 - `OPENAI_MODEL`:
   - 답변 생성 모델입니다.
@@ -61,13 +61,13 @@
 - `AUTO_INGEST_CLAIMLENS_RERANK_MIN_SCORE`:
   - ClaimLens 자동 수집 후보의 최소 점수입니다.
 
-## 보안 원칙
+## 5. 보안 원칙
 
 - 실제 API 키와 비밀번호는 `.env` 또는 배포 플랫폼 secret에만 저장합니다.
 - `.env` 파일은 커밋하지 않고 `backend/.env.example`만 공유합니다.
 - 환경변수 값은 README와 문서에 실제 값을 기록하지 않습니다.
 
-## CI 동작
+## 6. CI 동작
 
 - workflow:
   - `.github/workflows/ci.yml`
@@ -84,14 +84,14 @@
   - `frontend/package-lock.json` 기준 `npm ci`
   - Next.js production build 실행
 
-## CI에서 현재 검사하지 않는 항목
+## 7. CI에서 현재 검사하지 않는 항목
 
 - 백엔드 전체 pytest 자동 실행
 - 프론트엔드 린트와 TypeScript 검사
 - 외부 OpenAI·Pinecone·KIPRIS 실서비스 연결
 - 실제 운영 데이터베이스 migration과 rollback
 
-## 로컬 검증 명령
+## 8. 로컬 검증 명령
 
 - 백엔드 테스트: `cd backend && pytest`
 - 프론트엔드 린트: `cd frontend && npm run lint`
