@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { PatentSource } from "@/types/search";
 
@@ -124,13 +124,6 @@ function PatentContentRenderer({ content, matchedTerms }: { content: string; mat
 }
 
 export default function PatentDetailModal({ patent, onClose }: PatentDetailModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
   useEffect(() => {
     if (!patent) return;
 
@@ -146,8 +139,7 @@ export default function PatentDetailModal({ patent, onClose }: PatentDetailModal
     };
   }, [patent, onClose]);
 
-  if (!patent) return null;
-  if (!mounted) return null;
+  if (!patent || typeof document === "undefined") return null;
 
   const matchedTerms = Array.isArray(patent.matched_terms) ? patent.matched_terms : [];
   const content = patent.full_content || patent.relevance_text || "상세 문서 내용이 없습니다.";

@@ -198,7 +198,7 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
                 {event.decision?.reasoning && (
                   <div className="relative pl-3 border-l-2 border-indigo-200/50">
                     <p className="text-xs text-gray-500 italic leading-relaxed whitespace-pre-line">
-                      "{event.decision.reasoning}"
+                      &quot;{event.decision.reasoning}&quot;
                     </p>
                   </div>
                 )}
