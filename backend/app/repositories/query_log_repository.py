@@ -11,7 +11,7 @@
 
 import logging
 
-from app.db.database import SessionLocal
+from app.db.database import session_scope
 from app.models.feedback import QueryLog
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ def save_query_log(
     elapsed_ms: int,
 ) -> int | None:
     try:
-        with SessionLocal() as db:
+        with session_scope() as db:
             log_entry = QueryLog(
                 query=query,
                 answer=answer,
