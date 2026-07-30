@@ -7,11 +7,12 @@ import AiAnswer from "@/components/search/AiAnswer";
 import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import AgentTimeline from "@/components/search/AgentTimeline";
-import { searchPatents, searchPatentsStream, streamClaimLensAnalysis } from "@/lib/api";
 import type { ClaimLensEvent, ClaimLensEventType } from "@/types/claimlens";
-import type { PatentSource, SearchStreamEvent } from "@/types/search";
+import type { SearchStreamEvent } from "@/types/search";
 import ReactMarkdown from "react-markdown";
 import PatentDetailModal from "@/components/patent/PatentDetailModal";
+import { useClaimLensStream } from "@/hooks/useClaimLensStream";
+import { useSearchStream } from "@/hooks/useSearchStream";
 
 type SearchMode = "rag" | "claimlens";
 type Tone = "ok" | "warn" | "neutral";
@@ -32,17 +33,18 @@ const claimLensQueries = [
 
 export default function SearchPage() {
   const [mode, setMode] = useState<SearchMode>("rag");
-  const [streamedAnswer, setStreamedAnswer] = useState("");
-  const [streamedSources, setStreamedSources] = useState<PatentSource[]>([]);
-  const [queryLogId, setQueryLogId] = useState<number | undefined>(undefined);
-  const [ragEvents, setRagEvents] = useState<SearchStreamEvent[]>([]);
-  const [claimLensEvents, setClaimLensEvents] = useState<ClaimLensEvent[]>([]);
   const [activeQuery, setActiveQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const searchRunRef = useRef(0);
+  const ragStream = useSearchStream();
+  const claimLensStream = useClaimLensStream();
+
+  const streamedAnswer = ragStream.answer;
+  const streamedSources = ragStream.sources;
+  const queryLogId = ragStream.queryLogId;
+  const ragEvents = ragStream.events;
+  const claimLensEvents = claimLensStream.events;
+  const isLoading = mode === "rag" ? ragStream.isLoading : claimLensStream.isLoading;
+  const isStreaming = mode === "rag" && ragStream.isStreaming;
+  const error = mode === "rag" ? ragStream.error : claimLensStream.error;
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -83,97 +85,20 @@ export default function SearchPage() {
     }
   }, [streamedAnswer, isStreaming]);
 
-  const handleSearch = async (query: string) => {
-    abortRef.current?.abort();
-    const runId = searchRunRef.current + 1;
-    searchRunRef.current = runId;
-    const isCurrentRun = () => searchRunRef.current === runId;
-
+  const handleSearch = (query: string) => {
     setActiveQuery(query);
-    setIsLoading(true);
-    setIsStreaming(false);
-    setError(null);
-    setStreamedAnswer("");
-    setStreamedSources([]);
-    setQueryLogId(undefined);
-    setRagEvents([]);
-    setClaimLensEvents([]);
-
-    try {
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      if (mode === "rag") {
-        try {
-          await searchPatentsStream(
-            query,
-            (event) => {
-              if (!isCurrentRun()) return;
-              setRagEvents((events) => [...events, event]);
-              if (event.type === "sources") {
-                setStreamedSources(event.sources);
-                setIsLoading(false);
-                setIsStreaming(true);
-              } else if (event.type === "answer_delta") {
-                setStreamedAnswer((prev) => prev + event.delta);
-              } else if (event.type === "done") {
-                setQueryLogId(event.query_log_id);
-                setIsStreaming(false);
-              }
-            },
-            5,
-            { signal: controller.signal },
-          );
-        } catch (streamError) {
-          if (!isCurrentRun()) return;
-          if (streamError instanceof DOMException && streamError.name === "AbortError") {
-            throw streamError;
-          }
-          const fallbackResult = await searchPatents(query);
-          if (!isCurrentRun()) return;
-          setStreamedAnswer(fallbackResult.answer);
-          setStreamedSources(fallbackResult.sources);
-          setQueryLogId(fallbackResult.query_log_id);
-        }
-      } else {
-        await streamClaimLensAnalysis(
-          query,
-          (event) => {
-            if (!isCurrentRun()) return;
-            setClaimLensEvents((events) => [...events, event]);
-          },
-          { topK: 5, signal: controller.signal },
-        );
-      }
-    } catch (err) {
-      if (!isCurrentRun()) return;
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setError(mode === "rag" ? "검색이 중단되었습니다." : "ClaimLens 검토가 중단되었습니다.");
-      } else {
-        setError(err instanceof Error ? err.message : "검색 중 오류가 발생했습니다.");
-      }
-    } finally {
-      if (isCurrentRun()) {
-        setIsLoading(false);
-        setIsStreaming(false);
-        abortRef.current = null;
-      }
+    if (mode === "rag") {
+      ragStream.start(query);
+    } else {
+      claimLensStream.start(query);
     }
   };
 
   const switchMode = (nextMode: SearchMode) => {
-    abortRef.current?.abort();
-    searchRunRef.current += 1;
+    ragStream.reset();
+    claimLensStream.reset();
     setMode(nextMode);
-    setError(null);
-    setStreamedAnswer("");
-    setStreamedSources([]);
-    setQueryLogId(undefined);
-    setRagEvents([]);
-    setClaimLensEvents([]);
     setActiveQuery("");
-    setIsLoading(false);
-    setIsStreaming(false);
   };
 
   const quickQueries = mode === "rag" ? ragQueries : claimLensQueries;
@@ -225,7 +150,7 @@ export default function SearchPage() {
 
           <SearchBar
             onSearch={handleSearch}
-            onCancel={() => abortRef.current?.abort()}
+            onCancel={() => (mode === "rag" ? ragStream.cancel() : claimLensStream.cancel())}
             isLoading={isLoading || isStreaming}
             buttonLabel={isLoading || isStreaming ? "중단" : "검색"}
             placeholder={
@@ -283,10 +208,7 @@ export default function SearchPage() {
               {(streamedAnswer || streamedSources.length > 0) && (
                 <ResetButton
                   onClick={() => {
-                    setStreamedAnswer("");
-                    setStreamedSources([]);
-                    setQueryLogId(undefined);
-                    setRagEvents([]);
+                    ragStream.reset();
                   }}
                 />
               )}
@@ -304,10 +226,9 @@ export default function SearchPage() {
                 candidates={candidates}
                 chartRows={chartRows}
                 reportMarkdown={String(report?.data?.markdown ?? "")}
-                onStop={() => abortRef.current?.abort()}
+                onStop={claimLensStream.cancel}
                 onReset={() => {
-                  setClaimLensEvents([]);
-                  setError(null);
+                  claimLensStream.reset();
                 }}
               />
               <div ref={timelineRef} className="h-6" />
