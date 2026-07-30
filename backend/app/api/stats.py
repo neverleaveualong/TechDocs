@@ -2,18 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter
 from pinecone import Pinecone
 from datetime import datetime, timezone
 
 from sqlalchemy import distinct, func
 
 from app.config import settings
+from app.api.errors import raise_internal_error
 from app.db.database import SessionLocal
 from app.models.auto_ingest import AutoIngestCache
 from app.models.claimlens import ClaimLensClaim, ClaimLensClaimElement, ClaimLensPatent
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 COMPANY_SAMPLE_LIMIT = 500
 
@@ -54,7 +58,7 @@ async def get_stats():
             "auto_ingest": auto_ingest_stats,
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"통계 조회 실패: {exc}") from exc
+        raise_internal_error(logger, exc, "통계 조회 실패")
 
 
 def _pick_namespace_stats(namespaces: dict[str, dict], namespace: str) -> dict[str, int | str]:

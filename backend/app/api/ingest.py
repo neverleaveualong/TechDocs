@@ -1,9 +1,13 @@
-from fastapi import APIRouter, HTTPException
+import logging
 
+from fastapi import APIRouter
+
+from app.api.errors import raise_internal_error
 from app.models.ingest import IngestRequest, IngestResponse
 from app.ingestion.pipeline import ingest_patents
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=IngestResponse)
@@ -17,5 +21,5 @@ async def ingest(request: IngestRequest):
             pages=request.pages,
         )
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"인제스트 실패: {str(e)}")
+    except Exception as exc:
+        raise_internal_error(logger, exc, "인제스트 실패")
