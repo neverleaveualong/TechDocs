@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
+import Providers from "@/app/providers";
 
 export const metadata: Metadata = {
   title: "TechDocs — 특허 AI 검색",
@@ -12,10 +13,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="min-h-screen bg-gray-50">
-        <Sidebar />
-        <main className="min-h-screen" style={{ marginLeft: "240px" }}>
-          {children}
-        </main>
+        <Providers>
+          <Sidebar />
+          <main className="min-h-screen" style={{ marginLeft: "240px" }}>
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );
