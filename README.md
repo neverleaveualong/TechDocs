@@ -1,6 +1,6 @@
 # TechDocs
 
-- 수정일자: 2026-07-30 13:49 KST
+- 수정일자: 2026-07-30 15:35 KST
 - 작성자: 심우현
 - 프로젝트 개요: 기업의 특허 조사와 기술 검토를 지원하는 AI 기반 검색·분석 프로젝트
 - 데모: https://techdocs-app.vercel.app
@@ -71,12 +71,12 @@
 
 ## 상세 기술 문서
 
-- [프론트엔드 기술 문서](docs/FRONTEND.md)
-- [AI Agent 백엔드 기술 문서](docs/BACKEND.md)
 - [API 설계서](docs/API.md)
 - [DB 설계서 및 ERD](docs/DATABASE.md)
 - [시스템 아키텍처](docs/ARCHITECTURE.md)
 - [실행 환경 및 CI 문서](docs/RUNTIME_ENVIRONMENT.md)
+- [프론트엔드 기술 문서](docs/FRONTEND.md)
+- [AI Agent 백엔드 기술 문서](docs/BACKEND.md)
 
 ## 라이선스
 
