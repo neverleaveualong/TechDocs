@@ -71,7 +71,6 @@
 
 ## 상세 기술 문서
 
-- [전체 기술 문서 인덱스](docs/README.md)
 - [프론트엔드 기술 문서](docs/FRONTEND.md)
 - [AI Agent 백엔드 기술 문서](docs/BACKEND.md)
 - [API 설계서](docs/API.md)
