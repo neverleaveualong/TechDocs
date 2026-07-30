@@ -7,8 +7,8 @@ import AiAnswer from "@/components/search/AiAnswer";
 import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import AgentTimeline from "@/components/search/AgentTimeline";
-import type { ClaimLensEvent, ClaimLensEventType } from "@/types/claimlens";
-import type { SearchStreamEvent } from "@/types/search";
+import type { ClaimLensCandidate, ClaimLensEvent, ClaimLensEventType } from "@/types/claimlens";
+import type { PatentSource, SearchStreamEvent } from "@/types/search";
 import ReactMarkdown from "react-markdown";
 import PatentDetailModal from "@/components/patent/PatentDetailModal";
 import { useClaimLensStream } from "@/hooks/useClaimLensStream";
@@ -105,7 +105,7 @@ export default function SearchPage() {
   const report = claimLensEvents.findLast((event) => event.type === "final_report");
   const chartRows = claimLensEvents.filter((event) => event.type === "claim_chart_row");
   const features = getToolResultArray(claimLensEvents, "extract_product_features", "features");
-  const candidates = getToolResultArray(claimLensEvents, "search_claim_candidates", "candidates");
+  const candidates = getToolResultArray<ClaimLensCandidate>(claimLensEvents, "search_claim_candidates", "candidates");
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -454,12 +454,14 @@ function ClaimLensResult({
   events: ClaimLensEvent[];
   isLoading: boolean;
   features: unknown[];
-  candidates: unknown[];
+  candidates: ClaimLensCandidate[];
   chartRows: ClaimLensEvent[];
   reportMarkdown: string;
   onStop: () => void;
   onReset: () => void;
 }) {
+  const [selectedPatent, setSelectedPatent] = useState<PatentSource | null>(null);
+
   // 1. 분석 진행 중(isLoading)일 때 보여줄 로딩 상태 뷰
   if (isLoading) {
     return (
@@ -497,7 +499,6 @@ function ClaimLensResult({
   }
 
   // 2. 분석 완료 후 보여줄 결과 상세 뷰
-  const [selectedPatent, setSelectedPatent] = useState<any | null>(null);
   const latestDecision = events.filter((event) => event.type === "supervisor_decision").at(-1);
   const autoIngest = getAutoIngestData(events);
   const summary = buildClaimLensSummary(events, candidates, chartRows);
@@ -505,8 +506,6 @@ function ClaimLensResult({
   // 구성요소 완비의 원칙(All Elements Rule) 기반 침해 위험도 진단
   const isHighRisk = summary.rowCount > 0 && summary.matchedCount === summary.rowCount;
   const isMediumRisk = summary.rowCount > 0 && (summary.matchedCount > 0 || events.some(e => asRecord(e.data).match === "partial"));
-  const isLowRisk = summary.rowCount > 0 && summary.matchedCount === 0;
-
   const riskTitle = isHighRisk 
     ? "특허 침해 위험도 높음 (High Risk)" 
     : isMediumRisk 
@@ -624,32 +623,6 @@ function ClaimLensResult({
   );
 }
 
-function StepPill({ state }: { state: "done" | "running" | "waiting" }) {
-  const label = state === "done" ? "완료" : state === "running" ? "진행" : "대기";
-  const klass =
-    state === "done"
-      ? "bg-teal-50 text-teal-700"
-      : state === "running"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-gray-100 text-gray-400";
-  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${klass}`}>{label}</span>;
-}
-
-function SummaryTile({ label, value, tone }: { label: string; value: ReactNode; tone: Tone }) {
-  const klass =
-    tone === "ok"
-      ? "border-teal-100 bg-teal-50 text-teal-800"
-      : tone === "warn"
-        ? "border-amber-100 bg-amber-50 text-amber-800"
-        : "border-gray-100 bg-white text-gray-800";
-  return (
-    <div className={`rounded-xl border p-4 shadow-sm ${klass}`}>
-      <p className="text-[11px] font-semibold opacity-70">{label}</p>
-      <p className="mt-1 text-xl font-extrabold tracking-tight">{value}</p>
-    </div>
-  );
-}
-
 function QualityBanner({ decision }: { decision?: ClaimLensEvent }) {
   const data = asRecord(decision?.data);
   const grade = String(data.qualityGrade ?? "");
@@ -658,8 +631,6 @@ function QualityBanner({ decision }: { decision?: ClaimLensEvent }) {
   const summary = String(data.confidenceSummary ?? "분석 품질을 평가하는 중입니다.");
   const fields = Array.isArray(data.recommendedInputFields) ? data.recommendedInputFields.map(String) : [];
   const isGood = grade === "good";
-  const isInsufficient = grade === "insufficient";
-
   if (isGood) {
     return (
       <section className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 shadow-sm animate-fade-in">
@@ -757,7 +728,13 @@ function SupervisorDecisionPanel({
   );
 }
 
-function CandidatePanel({ candidates, onOpenPatent }: { candidates: unknown[]; onOpenPatent: (patent: any) => void }) {
+function CandidatePanel({
+  candidates,
+  onOpenPatent,
+}: {
+  candidates: ClaimLensCandidate[];
+  onOpenPatent: (patent: PatentSource) => void;
+}) {
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
@@ -839,7 +816,7 @@ function ClaimChartPanel({ rows }: { rows: ClaimLensEvent[] }) {
         <div>
           <h3 className="text-sm font-bold text-gray-900">청구항 구성요소 대조표</h3>
           <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-            ⚖️ 특허 침해 판단의 '구성요소 완비 법칙'에 따라 특허 청구범위 항목과 제품 기능을 1:1 대조합니다.
+            ⚖️ 특허 침해 판단의 &ldquo;구성요소 완비 법칙&rdquo;에 따라 특허 청구범위 항목과 제품 기능을 1:1 대조합니다.
           </p>
         </div>
         <span className="rounded border border-teal-100 bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700">
@@ -924,23 +901,23 @@ function ReportPanel({ markdown }: { markdown: string }) {
         {cleanedMarkdown ? (
           <ReactMarkdown
             components={{
-              h2: ({ node, ...props }) => (
+              h2: (props) => (
                 <h2 className="text-sm sm:text-base font-extrabold text-gray-950 mt-5 mb-3 pb-1 border-b border-gray-150 flex items-center gap-1.5" {...props}>
                   <span className="h-3.5 w-1 bg-teal-500 rounded" />
                   {props.children}
                 </h2>
               ),
-              h3: ({ node, ...props }) => (
+              h3: (props) => (
                 <h3 className="text-xs sm:text-sm font-extrabold text-gray-850 mt-4 mb-2 pl-2 border-l-2 border-teal-400 flex items-center gap-1" {...props} />
               ),
-              ul: ({ node, ...props }) => <ul className="list-none pl-1 my-3 space-y-2" {...props} />,
-              li: ({ node, ...props }) => (
+              ul: (props) => <ul className="list-none pl-1 my-3 space-y-2" {...props} />,
+              li: (props) => (
                 <li className="text-xs sm:text-sm text-gray-650 leading-relaxed flex items-start gap-2" {...props}>
                   <i className="ri-check-line text-teal-600 mt-0.5 text-xs shrink-0" />
                   <span>{props.children}</span>
                 </li>
               ),
-              p: ({ node, ...props }) => <p className="my-2.5 text-xs sm:text-sm text-gray-650 leading-relaxed" {...props} />,
+              p: (props) => <p className="my-2.5 text-xs sm:text-sm text-gray-650 leading-relaxed" {...props} />,
             }}
           >
             {cleanedMarkdown}
@@ -972,8 +949,8 @@ function CandidateItem({
   candidate,
   onOpenPatent,
 }: {
-  candidate: unknown;
-  onOpenPatent: (patent: any) => void;
+  candidate: ClaimLensCandidate;
+  onOpenPatent: (patent: PatentSource) => void;
 }) {
   const data = asRecord(candidate);
   const patent = asRecord(data.patent);
@@ -1122,10 +1099,10 @@ function EmptyState({ mode }: { mode: SearchMode }) {
   );
 }
 
-function getToolResultArray(events: ClaimLensEvent[], tool: string, key: string) {
+function getToolResultArray<T = unknown>(events: ClaimLensEvent[], tool: string, key: string): T[] {
   const data = events.findLast((event) => event.tool === tool && event.type === "tool_result")?.data;
   const value = asRecord(data)[key];
-  return Array.isArray(value) ? value : [];
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
 function getAutoIngestData(events: Array<ClaimLensEvent | SearchStreamEvent>): Record<string, unknown> {
@@ -1136,7 +1113,7 @@ function getAutoIngestData(events: Array<ClaimLensEvent | SearchStreamEvent>): R
   return asRecord(event.data);
 }
 
-function buildClaimLensSummary(events: ClaimLensEvent[], candidates: unknown[], chartRows: ClaimLensEvent[]) {
+function buildClaimLensSummary(events: ClaimLensEvent[], candidates: ClaimLensCandidate[], chartRows: ClaimLensEvent[]) {
   const latestDecision = asRecord(events.filter((event) => event.type === "supervisor_decision").at(-1)?.data);
   const topScoreFromDecision = latestDecision.topScore;
   const claimElementCount = latestDecision.claimElementCount;
