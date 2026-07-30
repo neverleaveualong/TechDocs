@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { submitFeedback } from "@/lib/api";
 
 interface AiAnswerProps {
@@ -13,19 +14,17 @@ interface AiAnswerProps {
 
 export default function AiAnswer({ answer, query, queryLogId, isStreaming = false }: AiAnswerProps) {
   const [voted, setVoted] = useState<"up" | "down" | null>(null);
-  const [loading, setLoading] = useState(false);
+  const feedbackMutation = useMutation({
+    mutationFn: ({ queryLogId, rating }: { queryLogId: number; rating: number }) =>
+      submitFeedback(queryLogId, rating),
+    onSuccess: (_, variables) => {
+      setVoted(variables.rating > 0 ? "up" : "down");
+    },
+  });
 
-  const handleFeedback = async (rating: number, type: "up" | "down") => {
+  const handleFeedback = (rating: number) => {
     if (!queryLogId || voted) return;
-    setLoading(true);
-    try {
-      await submitFeedback(queryLogId, rating);
-      setVoted(type);
-    } catch {
-      // silent fail
-    } finally {
-      setLoading(false);
-    }
+    feedbackMutation.mutate({ queryLogId, rating });
   };
 
   const formattedAnswer = answer;
@@ -312,8 +311,8 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
         <div className="px-5 sm:px-6 py-3 border-t border-gray-100 flex items-center gap-3 bg-gray-50/50">
           <span className="text-[11px] text-gray-400">답변 결과가 도움이 되었나요?</span>
           <button
-            onClick={() => handleFeedback(1, "up")}
-            disabled={loading || voted !== null}
+            onClick={() => handleFeedback(1)}
+            disabled={feedbackMutation.isPending || voted !== null}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
               voted === "up"
                 ? "bg-green-100 text-green-700 border border-green-200"
@@ -324,8 +323,8 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
             도움됨
           </button>
           <button
-            onClick={() => handleFeedback(-1, "down")}
-            disabled={loading || voted !== null}
+            onClick={() => handleFeedback(-1)}
+            disabled={feedbackMutation.isPending || voted !== null}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
               voted === "down"
                 ? "bg-red-100 text-red-700 border border-red-200"
