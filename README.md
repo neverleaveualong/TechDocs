@@ -8,6 +8,14 @@
 - API 문서: https://techdocs-1v4q.onrender.com/docs
 - 사용 조건: 포트폴리오 및 기술 검토 목적의 저장소이며 별도 오픈소스 라이선스를 부여하지 않습니다.
 
+## 기술 문서 바로가기
+
+- [전체 기술 문서 인덱스](docs/README.md)
+- [API 설계서](docs/API.md)
+- [DB 설계서 및 ERD](docs/DATABASE.md)
+- [시스템 아키텍처](docs/ARCHITECTURE.md)
+- [실행 환경 및 CI 문서](docs/RUNTIME_ENVIRONMENT.md)
+
 ## 현황
 
 - 특허 정보는 기술 동향 분석, 선행기술 조사, 제품 개발 검토에 활용할 수 있습니다.
