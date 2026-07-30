@@ -9,43 +9,19 @@ from app.config import settings
 from app.core.patent_query_agent import build_patent_query_plan
 from app.core.rag_pipeline import rag_pipeline
 from app.core.rate_limit import limiter
-from app.db.database import SessionLocal
-from app.models.feedback import QueryLog
 from app.models.search import (
     SearchRequest,
     SearchResponse,
     SimilarityRequest,
     SimilarityResponse,
 )
+from app.repositories.query_log_repository import save_query_log as _save_query_log
 
 # LangGraph Components
 from app.agents.graph import rag_agent_graph
 from app.agents.protocol import AgentAction
 
 router = APIRouter()
-
-
-def _save_query_log(
-    query: str,
-    answer: str,
-    sources: list[dict],
-    use_hybrid: bool,
-    elapsed_ms: int,
-) -> int | None:
-    try:
-        with SessionLocal() as db:
-            log_entry = QueryLog(
-                query=query,
-                answer=answer,
-                sources=sources,
-                search_mode="hybrid" if use_hybrid else "vector",
-                response_time_ms=elapsed_ms,
-            )
-            db.add(log_entry)
-            db.commit()
-            return log_entry.id
-    except Exception:
-        return None
 
 
 def _encode_stream_event(payload: dict) -> bytes:
@@ -337,4 +313,3 @@ async def similarity_search(request: Request, body: SimilarityRequest):
         return {"results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"similarity search failed: {str(e)}")
-
