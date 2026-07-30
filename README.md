@@ -1,12 +1,12 @@
 # TechDocs
 
-- 수정일자: 2026-07-30 16:46 KST
+- 수정일자: 2026-07-30 17:06 KST
 - 작성자: 심우현
 - 프로젝트 개요: 기업의 특허 조사와 기술 검토를 지원하는 AI 기반 검색·분석 프로젝트
 - 데모: https://techdocs-app.vercel.app
 - 라이선스: 본 프로젝트의 저작권자는 Paul Sim이며, 사용 권한은 Paul Sim에게만 있습니다.
 
-![TechDocs 실제 서비스 화면](docs/assets/techdocs-overview.png)
+![TechDocs 특허 검색 과정](docs/assets/techdocs-search-demo.gif)
 
 ## 목차
 
