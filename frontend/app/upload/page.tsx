@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ingestPatents } from "@/lib/api";
 
 const presetCompanies = [
@@ -14,25 +15,25 @@ const presetCompanies = [
 export default function UploadPage() {
   const [applicant, setApplicant] = useState("");
   const [pages, setPages] = useState(3);
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<{ patents_collected: number; vectors_stored: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const ingestMutation = useMutation({
+    mutationFn: ({ applicant, pages }: { applicant: string; pages: number }) =>
+      ingestPatents(applicant, pages),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
 
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!applicant.trim()) return;
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const data = await ingestPatents(applicant.trim(), pages);
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "데이터 수집 실패");
-    } finally {
-      setIsLoading(false);
-    }
+    ingestMutation.reset();
+    ingestMutation.mutate({ applicant: applicant.trim(), pages });
   };
+
+  const isLoading = ingestMutation.isPending;
+  const result = ingestMutation.data;
+  const error = ingestMutation.error?.message;
 
   return (
     <div className="min-h-screen bg-gray-50">
