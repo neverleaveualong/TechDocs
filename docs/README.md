@@ -15,7 +15,7 @@
   - 로컬 실행, 환경변수, CI 검증 범위와 향후 고도화 방향을 정리한 문서입니다.
 - [프론트엔드 기술 문서](FRONTEND.md)
   - 기술 스택, 화면 책임, React Query, 스트림 Hook, 프론트엔드 상태관리를 정리합니다.
-- [AI Agent 백엔드 기술 문서](BACKEND.md)
+- [백엔드(AI Agent) 기술 문서](BACKEND.md)
   - 자연어 검색, 자동 수집, ClaimLens, 계층별 책임을 정리합니다.
 
 ## 작성 원칙

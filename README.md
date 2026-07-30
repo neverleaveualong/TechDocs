@@ -62,12 +62,12 @@
   - 검색, 특허 수집, 대시보드 통계를 하나의 서비스 흐름으로 연결합니다.
   - 검색 진행 상황과 ClaimLens 분석 과정을 실시간으로 보여줍니다.
   - 상세 내용은 [프론트엔드 기술 문서](docs/FRONTEND.md)에서 확인할 수 있습니다.
-- AI Agent 백엔드:
+- 백엔드(AI Agent):
   - 검색 결과가 부족하면 필요한 특허 정보를 자동으로 수집하고 다시 검색합니다.
   - 검색 결과를 바탕으로 근거가 포함된 답변을 생성합니다.
   - 제품 설명과 특허 청구항을 구성요소 단위로 비교합니다.
   - 검색과 분석의 진행 상태를 실시간으로 전달합니다.
-  - 상세 내용은 [AI Agent 백엔드 기술 문서](docs/BACKEND.md)에서 확인할 수 있습니다.
+  - 상세 내용은 [백엔드(AI Agent) 기술 문서](docs/BACKEND.md)에서 확인할 수 있습니다.
 
 ## 상세 기술 문서
 
@@ -76,7 +76,7 @@
 - [시스템 아키텍처](docs/ARCHITECTURE.md)
 - [실행 환경 및 CI 문서](docs/RUNTIME_ENVIRONMENT.md)
 - [프론트엔드 기술 문서](docs/FRONTEND.md)
-- [AI Agent 백엔드 기술 문서](docs/BACKEND.md)
+- [백엔드(AI Agent) 기술 문서](docs/BACKEND.md)
 
 ## 라이선스
 
