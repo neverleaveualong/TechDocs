@@ -1,24 +1,73 @@
-import type { SearchResponse, SearchStreamEvent, SimilarityResponse } from "@/types/search";
+import type {
+  FeedbackStats,
+  SearchResponse,
+  SearchStreamEvent,
+  SimilarityResponse,
+} from "@/types/search";
 import type { ClaimLensEvent } from "@/types/claimlens";
 import type { Stats } from "@/types/stats";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://techdocs-1v4q.onrender.com";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+type ErrorPayload = {
+  detail?: unknown;
+  message?: unknown;
+  error?: unknown;
+};
+
+function getErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+
+  const errorPayload = payload as ErrorPayload;
+  if (typeof errorPayload.detail === "string" && errorPayload.detail.trim()) {
+    return errorPayload.detail;
+  }
+  if (typeof errorPayload.message === "string" && errorPayload.message.trim()) {
+    return errorPayload.message;
+  }
+  if (typeof errorPayload.error === "string" && errorPayload.error.trim()) {
+    return errorPayload.error;
+  }
+  return fallback;
+}
+
+async function throwResponseError(response: Response, fallback: string): Promise<never> {
+  const payload = await response.json().catch(() => null);
+  throw new ApiError(
+    getErrorMessage(payload, `${fallback} (HTTP ${response.status})`),
+    response.status,
+  );
+}
+
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers,
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: "요청 실패" }));
-    throw new Error(error.detail || `HTTP ${res.status}`);
+    await throwResponseError(res, "요청 실패");
   }
 
   return res.json();
 }
 
-export async function searchPatents(query: string, topK: number = 5) {
+export async function searchPatents(query: string, topK: number = 5): Promise<SearchResponse> {
   return fetchApi<SearchResponse>("/api/search/search", {
     method: "POST",
     body: JSON.stringify({ query, top_k: topK }),
@@ -30,7 +79,7 @@ export async function searchPatentsStream(
   onEvent: (event: SearchStreamEvent) => void,
   topK: number = 5,
   options?: { signal?: AbortSignal }
-) {
+): Promise<void> {
   const res = await fetch(`${API_URL}/api/search/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -39,8 +88,7 @@ export async function searchPatentsStream(
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: "요청 실패" }));
-    throw new Error(error.detail || `HTTP ${res.status}`);
+    await throwResponseError(res, "요청 실패");
   }
 
   if (!res.body) {
@@ -66,7 +114,7 @@ export async function searchPatentsStream(
       if (parsed.type === "keepalive") continue;
       const event = parsed as SearchStreamEvent;
       if (event.type === "error") {
-        throw new Error(event.detail);
+        throw new ApiError(event.detail, 200);
       }
       onEvent(event);
     }
@@ -77,7 +125,7 @@ export async function searchPatentsStream(
     if (parsed.type === "keepalive") return;
     const event = parsed as SearchStreamEvent;
     if (event.type === "error") {
-      throw new Error(event.detail);
+      throw new ApiError(event.detail, 200);
     }
     onEvent(event);
   }
@@ -87,7 +135,7 @@ export async function streamClaimLensAnalysis(
   productDescription: string,
   onEvent: (event: ClaimLensEvent) => void,
   options?: { topK?: number; signal?: AbortSignal }
-) {
+): Promise<void> {
   const res = await fetch(`${API_URL}/api/claimlens/stream`, {
     method: "POST",
     headers: {
@@ -102,8 +150,7 @@ export async function streamClaimLensAnalysis(
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: "침해 검토 요청 실패" }));
-    throw new Error(error.detail || `HTTP ${res.status}`);
+    await throwResponseError(res, "침해 검토 요청 실패");
   }
   if (!res.body) {
     throw new Error("침해 검토 스트림 응답이 비어 있습니다.");
@@ -123,13 +170,27 @@ export async function streamClaimLensAnalysis(
 
     for (const chunk of chunks) {
       const event = parseClaimLensSse(chunk);
-      if (event) onEvent(event);
+      emitClaimLensEvent(event, onEvent);
     }
   }
 
   buffer += decoder.decode();
   const finalEvent = parseClaimLensSse(buffer);
-  if (finalEvent) onEvent(finalEvent);
+  emitClaimLensEvent(finalEvent, onEvent);
+}
+
+function emitClaimLensEvent(
+  event: ClaimLensEvent | null,
+  onEvent: (event: ClaimLensEvent) => void,
+): void {
+  if (!event) return;
+  if (event.type === "error") {
+    throw new ApiError(
+      getErrorMessage(event.data, event.message || "침해 검토 중 오류가 발생했습니다."),
+      200,
+    );
+  }
+  onEvent(event);
 }
 
 function parseClaimLensSse(chunk: string): ClaimLensEvent | null {
@@ -142,25 +203,25 @@ function parseClaimLensSse(chunk: string): ClaimLensEvent | null {
   }
 }
 
-export async function submitFeedback(queryLogId: number, rating: number, comment?: string) {
+export async function submitFeedback(queryLogId: number, rating: number, comment?: string): Promise<{ id: number }> {
   return fetchApi<{ id: number }>("/api/feedback", {
     method: "POST",
     body: JSON.stringify({ query_log_id: queryLogId, rating, comment }),
   });
 }
 
-export async function getFeedbackStats() {
-  return fetchApi<import("@/types/search").FeedbackStats>("/api/feedback/stats");
+export async function getFeedbackStats(): Promise<FeedbackStats> {
+  return fetchApi<FeedbackStats>("/api/feedback/stats");
 }
 
-export async function similaritySearch(query: string, topK: number = 5) {
+export async function similaritySearch(query: string, topK: number = 5): Promise<SimilarityResponse> {
   return fetchApi<SimilarityResponse>("/api/search/similarity", {
     method: "POST",
     body: JSON.stringify({ query, top_k: topK }),
   });
 }
 
-export async function getStats() {
+export async function getStats(): Promise<Stats> {
   return fetchApi<Stats>("/api/stats/");
 }
 
@@ -169,7 +230,7 @@ export async function ingestPatents(
   pages: number = 5,
   startDate?: string,
   endDate?: string
-) {
+): Promise<{ status: string; patents_collected: number; vectors_stored: number }> {
   return fetchApi<{ status: string; patents_collected: number; vectors_stored: number }>(
     "/api/ingest",
     {
