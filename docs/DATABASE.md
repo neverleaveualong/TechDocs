@@ -9,9 +9,20 @@
   - `backend/app/models/claimlens.py`
   - `backend/app/models/auto_ingest.py`
   - `backend/app/ingestion/pipeline.py`
-  - `backend/app/ingestion/auto_ingest.py`
+- `backend/app/ingestion/auto_ingest.py`
 
-## 1. 저장소 구성
+## 목차
+
+- [2-1. 저장소 구성](#2-1-저장소-구성)
+- [2-2. ERD](#2-2-erd)
+- [2-3. 테이블 명세](#2-3-테이블-명세)
+- [2-4. SQLite FTS5 보조 인덱스](#2-4-sqlite-fts5-보조-인덱스)
+- [2-5. 외부 벡터 저장소 모델](#2-5-외부-벡터-저장소-모델)
+- [2-6. 트랜잭션 및 데이터 갱신](#2-6-트랜잭션-및-데이터-갱신)
+- [2-7. 현재 확인된 DB 설계 리스크](#2-7-현재-확인된-db-설계-리스크)
+- [2-8. 변경 관리](#2-8-변경-관리)
+
+## 2-1. 저장소 구성
 
 - PostgreSQL:
   - 기본 운영 데이터베이스입니다.
@@ -28,7 +39,7 @@
   - SQLite인 경우 기존 FTS5 테이블을 보존하면서 없을 때만 생성합니다.
   - 현재 별도 migration 도구나 migration 파일은 확인되지 않았습니다.
 
-## 2. ERD
+## 2-2. ERD
 
 ```mermaid
 erDiagram
@@ -112,9 +123,9 @@ erDiagram
   - 하나의 Claim은 여러 ClaimElement를 가질 수 있습니다.
   - AutoIngestCache는 특정 QueryLog나 Patent에 직접 연결되지 않은 자동 수집 실행 기록입니다.
 
-## 3. 테이블 명세
+## 2-3. 테이블 명세
 
-### 3.1 `query_logs`
+### 2-3-1. `query_logs`
 
 - 역할:
   - 자연어 검색 질문, 생성 답변, 출처와 응답 성능을 기록합니다.
@@ -136,7 +147,7 @@ erDiagram
   - 검색 응답은 QueryLog 저장 실패 시에도 중단되지 않습니다.
   - 이 경우 API 응답의 `query_log_id`가 `null`일 수 있습니다.
 
-### 3.2 `feedbacks`
+### 2-3-2. `feedbacks`
 
 - 역할:
   - QueryLog에 대한 사용자 평가와 의견을 기록합니다.
@@ -157,7 +168,7 @@ erDiagram
   - 데이터베이스 CHECK constraint로 rating 범위를 강제하지 않습니다.
   - 중복 피드백 방지 unique constraint도 정의되어 있지 않습니다.
 
-### 3.3 `patents`
+### 2-3-3. `patents`
 
 - 역할:
   - ClaimLens 분석에 필요한 특허 메타데이터를 저장합니다.
@@ -180,7 +191,7 @@ erDiagram
   - `application_number`에 unique constraint가 모델에 선언되어 있지 않습니다.
   - 수집 파이프라인은 application number로 기존 특허를 조회해 갱신하는 애플리케이션 규칙을 사용합니다.
 
-### 3.4 `claims`
+### 2-3-4. `claims`
 
 - 역할:
   - 특허 청구항 원문과 파싱 결과를 저장합니다.
@@ -203,7 +214,7 @@ erDiagram
 - 수집 시 동작:
   - 기존 특허의 청구항을 삭제하고 최신 파싱 결과를 다시 저장합니다.
 
-### 3.5 `claim_elements`
+### 2-3-5. `claim_elements`
 
 - 역할:
   - 청구항을 비교 가능한 기술 구성요소 단위로 저장합니다.
@@ -224,7 +235,7 @@ erDiagram
 - 수집 시 동작:
   - 기존 Claim의 구성요소를 삭제하고 최신 파싱 결과를 다시 저장합니다.
 
-### 3.6 `auto_ingest_cache`
+### 2-3-6. `auto_ingest_cache`
 
 - 역할:
   - 자동 수집 요청의 중복 방지, 호출량 제한, 결과와 실패 상태를 기록합니다.
@@ -253,7 +264,7 @@ erDiagram
 - 관계:
   - 현재 모델상 다른 테이블에 대한 외래키가 없습니다.
 
-## 4. SQLite FTS5 보조 인덱스
+## 2-4. SQLite FTS5 보조 인덱스
 
 - 테이블: `patent_fts`
 - 목적:
@@ -275,7 +286,7 @@ erDiagram
   - 정규 테이블의 원본 데이터가 아니라 검색 보조 인덱스입니다.
   - PostgreSQL 운영 환경의 기본 저장 모델과 동일한 테이블로 취급하면 안 됩니다.
 
-## 5. 외부 벡터 저장소 모델
+## 2-5. 외부 벡터 저장소 모델
 
 - RAG namespace:
   - 일반 특허 문서 청크와 메타데이터를 저장합니다.
@@ -294,7 +305,7 @@ erDiagram
   - Pinecone metadata의 `patent_id`, `claim_id`, `claim_element_id`가 관계형 데이터의 내부 ID를 가리킵니다.
   - 이 연결은 애플리케이션 규약이며 Pinecone이 외래키를 보장하지는 않습니다.
 
-## 6. 트랜잭션 및 데이터 갱신
+## 2-6. 트랜잭션 및 데이터 갱신
 
 - 요청 단위 DB 세션:
   - FastAPI `get_db`가 세션을 열고 요청 종료 후 닫습니다.
@@ -310,7 +321,7 @@ erDiagram
   - 질의 해시와 모드로 중복 수집을 제어합니다.
   - 일일·월간 KIPRIS 호출량과 캐시 TTL은 환경변수로 조정합니다.
 
-## 7. 현재 확인된 DB 설계 리스크
+## 2-7. 현재 확인된 DB 설계 리스크
 
 - 마이그레이션:
   - 현재 `create_all` 중심이라 운영 스키마 변경 이력과 롤백 절차가 별도로 필요합니다.
@@ -324,7 +335,7 @@ erDiagram
 - 관측성:
   - 자동 수집 기록은 있지만 QueryLog와 자동 수집 실행을 직접 연결하는 식별자가 없습니다.
 
-## 8. 변경 관리
+## 2-8. 변경 관리
 
 - 스키마 변경 전 확인:
   - API 응답과 프론트엔드 타입 영향

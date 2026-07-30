@@ -15,7 +15,24 @@
   - FastAPI 기본 문서: `/docs`
   - OpenAPI JSON: `/openapi.json`
 
-## 1. API 운영 원칙
+## 목차
+
+- [1-1. API 운영 원칙](#1-1-api-운영-원칙)
+- [1-2. 엔드포인트 요약](#1-2-엔드포인트-요약)
+- [1-3. 서버 상태 확인](#1-3-서버-상태-확인)
+- [1-4. KIPRIS 특허 검색](#1-4-kipris-특허-검색)
+- [1-5. 특허 데이터 수집](#1-5-특허-데이터-수집)
+- [1-6. 동기 자연어 RAG 검색](#1-6-동기-자연어-rag-검색)
+- [1-7. RAG 검색 스트리밍](#1-7-rag-검색-스트리밍)
+- [1-8. 유사 문서 검색](#1-8-유사-문서-검색)
+- [1-9. ClaimLens 분석 스트리밍](#1-9-claimlens-분석-스트리밍)
+- [1-10. 통계 조회](#1-10-통계-조회)
+- [1-11. 피드백 저장](#1-11-피드백-저장)
+- [1-12. 피드백 통계](#1-12-피드백-통계)
+- [1-13. 오류 계약 요약](#1-13-오류-계약-요약)
+- [1-14. 변경 관리](#1-14-변경-관리)
+
+## 1-1. API 운영 원칙
 
 - 모든 요청 본문은 별도 표기가 없으면 `application/json`을 사용합니다.
 - API prefix:
@@ -35,7 +52,7 @@
   - 외부 필드명은 현재 Pydantic 모델과 프론트엔드 타입을 기준으로 유지합니다.
   - 필드명 변경이 필요한 경우 API 모델, 프론트엔드 타입, 문서를 함께 변경해야 합니다.
 
-## 2. 엔드포인트 요약
+## 1-2. 엔드포인트 요약
 
 | Method | Path | 목적 | 응답 형식 | Rate Limit |
 | --- | --- | --- | --- | --- |
@@ -50,9 +67,9 @@
 | `POST` | `/api/feedback` | 검색 답변 피드백 저장 | JSON | 없음 |
 | `GET` | `/api/feedback/stats` | 피드백 통계 조회 | JSON | 없음 |
 
-## 3. 서버 상태 확인
+## 1-3. 서버 상태 확인
 
-### 3.1 `GET /health/`
+### 1-3-1. `GET /health/`
 
 - 목적:
   - 애플리케이션 프로세스가 요청을 처리할 수 있는지 확인합니다.
@@ -68,9 +85,9 @@
   - 외부 OpenAI, Pinecone, KIPRIS 연결 상태까지 검증하는 readiness check는 아닙니다.
   - `/health`로 요청하면 FastAPI의 trailing slash redirect가 발생할 수 있습니다.
 
-## 4. KIPRIS 특허 검색
+## 1-4. KIPRIS 특허 검색
 
-### 4.1 `POST /api/patents/search`
+### 1-4-1. `POST /api/patents/search`
 
 - 목적:
   - KIPRIS API에서 출원인과 기간 조건으로 특허 목록을 조회합니다.
@@ -119,9 +136,9 @@
   - 서버 로그에는 원인을 기록합니다.
   - 클라이언트에는 `500`과 `{"detail":"KIPRIS API 호출 실패"}`를 반환합니다.
 
-## 5. 특허 데이터 수집
+## 1-5. 특허 데이터 수집
 
-### 5.1 `POST /api/ingest/`
+### 1-5-1. `POST /api/ingest/`
 
 - 목적:
   - KIPRIS 특허를 수집하고 검색 및 ClaimLens 분석에 사용할 수 있도록 저장합니다.
@@ -165,9 +182,9 @@
   - 수집 API는 외부 API 호출과 벡터 저장을 포함하므로 동기 HTTP 요청 시간이 길어질 수 있습니다.
   - 현재 API 모델에는 `pages`와 날짜 값에 대한 범위·형식 검증이 없습니다.
 
-## 6. 동기 자연어 RAG 검색
+## 1-6. 동기 자연어 RAG 검색
 
-### 6.1 `POST /api/search/search`
+### 1-6-1. `POST /api/search/search`
 
 - 목적:
   - 자연어 질문을 특허 검색과 근거 기반 답변 생성으로 처리합니다.
@@ -217,9 +234,9 @@
   - 내부 예외는 로그에 기록합니다.
   - 클라이언트에는 `500`과 `{"detail":"search failed"}`를 반환합니다.
 
-## 7. RAG 검색 스트리밍
+## 1-7. RAG 검색 스트리밍
 
-### 7.1 `POST /api/search/stream`
+### 1-7-1. `POST /api/search/stream`
 
 - 목적:
   - 검색 계획, Agent 판단, 자동 수집, 출처, 답변 조각을 실시간으로 전달합니다.
@@ -265,9 +282,9 @@
   - 스트림 시작 후 예외는 `type=error`, `detail=search failed` 이벤트로 전달됩니다.
   - QueryLog 저장 실패는 `query_log_id: null`로 완료될 수 있으며 검색 결과 자체는 중단하지 않습니다.
 
-## 8. 유사 문서 검색
+## 1-8. 유사 문서 검색
 
-### 8.1 `POST /api/search/similarity`
+### 1-8-1. `POST /api/search/similarity`
 
 - 목적:
   - LLM 답변 생성 없이 유사 특허 문서만 조회합니다.
@@ -287,9 +304,9 @@
 | `results[].metadata` | `object` | 특허 메타데이터 |
 | `results[].score` | `number` | 유사도 점수 |
 
-## 9. ClaimLens 분석 스트리밍
+## 1-9. ClaimLens 분석 스트리밍
 
-### 9.1 `POST /api/claimlens/stream`
+### 1-9-1. `POST /api/claimlens/stream`
 
 - 목적:
   - 제품 설명과 특허 청구항 구성요소를 비교해 기술 검토 초안을 생성합니다.
@@ -362,9 +379,9 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
   - 입력 검증 실패는 `422`입니다.
   - 스트림 시작 후 오류는 `type=error` SSE 이벤트로 전달됩니다.
 
-## 10. 통계 조회
+## 1-10. 통계 조회
 
-### 10.1 `GET /api/stats/`
+### 1-10-1. `GET /api/stats/`
 
 - 목적:
   - 벡터 저장소, 회사별 특허 샘플, ClaimLens 영속 데이터, 자동 수집 현황을 한 번에 조회합니다.
@@ -406,9 +423,9 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
   - `cache_ttl_days`
   - `total_runs`
 
-## 11. 피드백 저장
+## 1-11. 피드백 저장
 
-### 11.1 `POST /api/feedback`
+### 1-11-1. `POST /api/feedback`
 
 - 목적:
   - 검색 결과에 대한 사용자 평가와 의견을 QueryLog에 연결해 저장합니다.
@@ -443,9 +460,9 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
   - Pydantic 모델에는 `rating` 값이 `1` 또는 `-1`인지 강제하는 validator가 없습니다.
   - 향후 API 계약을 강화할 때 기존 클라이언트 호환성을 먼저 검토해야 합니다.
 
-## 12. 피드백 통계
+## 1-12. 피드백 통계
 
-### 12.1 `GET /api/feedback/stats`
+### 1-12-1. `GET /api/feedback/stats`
 
 - 목적:
   - 전체 QueryLog, 피드백 수, 긍정 비율, 최근 부정 피드백을 조회합니다.
@@ -464,7 +481,7 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
   - `answer`: 당시 답변
   - `feedback_at`: 피드백 생성 시각
 
-## 13. 오류 계약 요약
+## 1-13. 오류 계약 요약
 
 | 상황 | Status | 응답 |
 | --- | --- | --- |
@@ -475,7 +492,7 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
 | 일반 내부 오류 | `500` | 공개용 `detail` 메시지 |
 | 스트림 처리 중 오류 | `200` 연결 내 이벤트 | NDJSON 또는 SSE `error` 이벤트 |
 
-## 14. 변경 관리
+## 1-14. 변경 관리
 
 - API 요청·응답 필드 변경 시 확인 대상:
   - Pydantic 모델
