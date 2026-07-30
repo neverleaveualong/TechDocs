@@ -23,6 +23,20 @@ SessionLocal = sessionmaker(
     autocommit=False,
 )
 
+SQLITE_FTS_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS patent_fts USING fts5(
+    application_number,
+    title,
+    abstract,
+    applicant_name,
+    register_status,
+    application_date,
+    ipc_number,
+    page_content,
+    tokenize='unicode61'
+);
+"""
+
 # API 등에서 사용할 DB 세션 의존성 제공자
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -45,6 +59,14 @@ def session_scope() -> Iterator[Session]:
         db.close()
 
 
+def ensure_sqlite_fts_table(db_engine) -> None:
+    """Create the SQLite FTS table when it does not already exist."""
+    from sqlalchemy import text
+
+    with db_engine.begin() as conn:
+        conn.execute(text(SQLITE_FTS_SCHEMA))
+
+
 def init_db():
     # 모델들을 임포트하여 Base.metadata.create_all 이 모든 테이블을 생성할 수 있도록 함
     from app.models.feedback import QueryLog, Feedback
@@ -53,22 +75,6 @@ def init_db():
     
     Base.metadata.create_all(bind=engine)
     
-    # SQLite인 경우 FTS5 전체 텍스트 검색 가상 테이블 생성
+    # SQLite인 경우 기존 인덱스를 보존하면서 FTS5 테이블을 준비한다.
     if is_sqlite:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            # 스키마 고도화를 위해 기존 구버전 가상 테이블이 있을 경우 재생성
-            conn.execute(text("DROP TABLE IF EXISTS patent_fts;"))
-            conn.execute(text("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS patent_fts USING fts5(
-                    application_number,
-                    title,
-                    abstract,
-                    applicant_name,
-                    register_status,
-                    application_date,
-                    ipc_number,
-                    page_content,
-                    tokenize='unicode61'
-                );
-            """))
+        ensure_sqlite_fts_table(engine)
