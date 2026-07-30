@@ -1,9 +1,13 @@
-from fastapi import APIRouter, HTTPException
+import logging
 
+from fastapi import APIRouter
+
+from app.api.errors import raise_internal_error
 from app.ingestion.kipris_client import kipris_client
 from app.models.patent import PatentSearchRequest, PatentSearchResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/search", response_model=PatentSearchResponse)
@@ -18,5 +22,5 @@ async def search_patents(request: PatentSearchRequest):
             num_of_rows=request.num_of_rows,
         )
         return PatentSearchResponse(patents=patents, total_count=total_count)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"KIPRIS API 호출 실패: {str(e)}")
+    except Exception as exc:
+        raise_internal_error(logger, exc, "KIPRIS API 호출 실패")

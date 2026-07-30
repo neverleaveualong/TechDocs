@@ -1,10 +1,12 @@
 import json
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from app.api.errors import log_stream_error
 from app.core.claimlens.vector_search import search_claim_candidates
 from app.core.claimlens.workflow import run_claimlens_v1_workflow
 from app.core.patent_query_agent import build_patent_query_plan
@@ -13,6 +15,7 @@ from app.ingestion.auto_ingest import maybe_auto_ingest_for_claimlens
 from app.models.claimlens_api import ClaimLensAgentEvent, ClaimLensAnalysisRequest
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 MIN_ACCEPTABLE_CANDIDATE_SCORE = 0.45
 MIN_ACCEPTABLE_MATCH_SCORE = 0.55
@@ -175,12 +178,13 @@ async def _stream_analysis(request: ClaimLensAnalysisRequest) -> AsyncIterator[s
         )
         yield _encode_sse(ClaimLensAgentEvent(type="step_completed", step="report_generation"))
     except Exception as exc:
+        log_stream_error(logger, exc, "ClaimLens analysis stream failed")
         yield _encode_sse(
             ClaimLensAgentEvent(
                 type="error",
                 step="analysis",
                 message="ClaimLens 분석 워크플로우 실행 중 오류가 발생했습니다.",
-                data={"error": str(exc)},
+                data={"error": "ClaimLens 분석 워크플로우 실행 중 오류가 발생했습니다."},
             )
         )
 

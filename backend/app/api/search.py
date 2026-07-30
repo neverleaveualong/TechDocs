@@ -1,8 +1,9 @@
 import asyncio
 import json
+import logging
 import time
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
@@ -20,8 +21,10 @@ from app.repositories.query_log_repository import save_query_log as _save_query_
 # LangGraph Components
 from app.agents.graph import rag_agent_graph
 from app.agents.protocol import AgentAction
+from app.api.errors import log_stream_error, raise_internal_error
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _encode_stream_event(payload: dict) -> bytes:
@@ -101,8 +104,8 @@ async def search(request: Request, body: SearchRequest):
             "query": body.query,
             "query_log_id": query_log_id,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"search failed: {str(e)}")
+    except Exception as exc:
+        raise_internal_error(logger, exc, "search failed")
 
 
 @router.post("/stream")
@@ -283,11 +286,12 @@ async def search_stream(request: Request, body: SearchRequest):
                     "query_log_id": query_log_id,
                 }
             )
-        except Exception as e:
+        except Exception as exc:
+            log_stream_error(logger, exc, "search stream failed")
             yield _encode_stream_event(
                 {
                     "type": "error",
-                    "detail": f"search failed: {str(e)}",
+                    "detail": "search failed",
                 }
             )
 
@@ -311,5 +315,5 @@ async def similarity_search(request: Request, body: SimilarityRequest):
             namespace=settings.rag_namespace,
         )
         return {"results": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"similarity search failed: {str(e)}")
+    except Exception as exc:
+        raise_internal_error(logger, exc, "similarity search failed")
