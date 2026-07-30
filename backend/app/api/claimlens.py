@@ -1,21 +1,18 @@
 import json
-import logging
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from app.api.errors import log_stream_error
 from app.core.claimlens.vector_search import search_claim_candidates
 from app.core.claimlens.workflow import run_claimlens_v1_workflow
 from app.core.patent_query_agent import build_patent_query_plan
 from app.db.database import SessionLocal
 from app.ingestion.auto_ingest import maybe_auto_ingest_for_claimlens
 from app.models.claimlens_api import ClaimLensAgentEvent, ClaimLensAnalysisRequest
+from app.services.claimlens_service import ClaimLensAnalysisService
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 MIN_ACCEPTABLE_CANDIDATE_SCORE = 0.45
 MIN_ACCEPTABLE_MATCH_SCORE = 0.55
@@ -36,157 +33,20 @@ async def stream_claimlens_analysis(
     )
 
 
-async def _stream_analysis(request: ClaimLensAnalysisRequest) -> AsyncIterator[str]:
-    steps = {
-        "input_analysis": "제품 설명에서 핵심 기능과 검색 질의를 추출합니다.",
-        "patent_search": "ClaimLens 벡터 인덱스에서 관련 청구항 후보를 검색합니다.",
-        "claim_loading": "후보 특허의 청구항과 claim element를 불러옵니다.",
-        "feature_matching": "claim element와 제품 기능을 비교합니다.",
-        "report_generation": "근거 기반 기술 검토 초안을 생성합니다.",
-    }
+def _build_analysis_service() -> ClaimLensAnalysisService:
+    return ClaimLensAnalysisService(
+        query_plan_builder=build_patent_query_plan,
+        workflow_runner=_run_workflow,
+        quality_evaluator=_evaluate_search_quality,
+        candidate_event_builder=_candidate_event,
+        auto_ingest=maybe_auto_ingest_for_claimlens,
+        sse_encoder=_encode_sse,
+    )
 
-    try:
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="step_started",
-                step="input_analysis",
-                message=steps["input_analysis"],
-            )
-        )
-        query_plan = build_patent_query_plan(
-            request.product_description,
-            intent_hint="claim_analysis",
-        )
-        claim_search_query = query_plan.rag_query or request.product_description
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="query_plan",
-                step="input_analysis",
-                data=query_plan.to_event_data(),
-            )
-        )
-        yield _encode_sse(ClaimLensAgentEvent(type="step_completed", step="input_analysis"))
 
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="step_started",
-                step="patent_search",
-                message=steps["patent_search"],
-            )
-        )
-        state = _run_workflow(request, claim_search_query)
-        yield _encode_sse(_candidate_event(state))
-
-        decision = _evaluate_search_quality(state)
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="supervisor_decision",
-                step="patent_search",
-                message=decision.message,
-                data=decision.to_event_data(),
-            )
-        )
-
-        if decision.should_auto_ingest:
-            yield _encode_sse(
-                ClaimLensAgentEvent(
-                    type="auto_ingest_started",
-                    step="patent_search",
-                    message="검색 품질이 부족해 KIPRIS에서 후보 특허를 자동 수집합니다.",
-                )
-            )
-            auto_ingest_result = await maybe_auto_ingest_for_claimlens(
-                request.product_description,
-                query_plan=query_plan,
-            )
-            yield _encode_sse(
-                ClaimLensAgentEvent(
-                    type="auto_ingest_completed",
-                    step="patent_search",
-                    data=auto_ingest_result.to_event_data(),
-                )
-            )
-            if auto_ingest_result.should_retry_search:
-                yield _encode_sse(
-                    ClaimLensAgentEvent(
-                        type="retry_search",
-                        step="patent_search",
-                        message="수집된 ClaimLens 데이터로 후보 검색을 다시 실행합니다.",
-                    )
-                )
-                state = _run_workflow(request, claim_search_query)
-                yield _encode_sse(_candidate_event(state))
-                decision = _evaluate_search_quality(state)
-                yield _encode_sse(
-                    ClaimLensAgentEvent(
-                        type="supervisor_decision",
-                        step="patent_search",
-                        message=decision.message,
-                        data={**decision.to_event_data(), "afterRetry": True},
-                    )
-                )
-        yield _encode_sse(ClaimLensAgentEvent(type="step_completed", step="patent_search"))
-
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="step_started",
-                step="claim_loading",
-                message=steps["claim_loading"],
-            )
-        )
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="tool_result",
-                step="input_analysis",
-                tool="extract_product_features",
-                data={"features": state.get("product_features", [])},
-            )
-        )
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="tool_result",
-                step="claim_loading",
-                tool="load_claim_elements",
-                data={"claimElementCount": len(state.get("claim_elements", []))},
-            )
-        )
-        yield _encode_sse(ClaimLensAgentEvent(type="step_completed", step="claim_loading"))
-
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="step_started",
-                step="feature_matching",
-                message=steps["feature_matching"],
-            )
-        )
-        for row in state.get("comparison_results", []):
-            yield _encode_sse(ClaimLensAgentEvent(type="claim_chart_row", data=row))
-        yield _encode_sse(ClaimLensAgentEvent(type="step_completed", step="feature_matching"))
-
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="step_started",
-                step="report_generation",
-                message=steps["report_generation"],
-            )
-        )
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="final_report",
-                data={"markdown": state.get("final_report", "")},
-            )
-        )
-        yield _encode_sse(ClaimLensAgentEvent(type="step_completed", step="report_generation"))
-    except Exception as exc:
-        log_stream_error(logger, exc, "ClaimLens analysis stream failed")
-        yield _encode_sse(
-            ClaimLensAgentEvent(
-                type="error",
-                step="analysis",
-                message="ClaimLens 분석 워크플로우 실행 중 오류가 발생했습니다.",
-                data={"error": "ClaimLens 분석 워크플로우 실행 중 오류가 발생했습니다."},
-            )
-        )
+async def _stream_analysis(request: ClaimLensAnalysisRequest):
+    async for event in _build_analysis_service().stream(request):
+        yield event
 
 
 def _run_workflow(request: ClaimLensAnalysisRequest, claim_search_query: str) -> dict:
