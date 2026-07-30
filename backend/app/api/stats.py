@@ -4,15 +4,16 @@ from typing import Any
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pinecone import Pinecone
 from datetime import datetime, timezone
 
 from sqlalchemy import distinct, func
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.api.errors import raise_internal_error
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.models.auto_ingest import AutoIngestCache
 from app.models.claimlens import ClaimLensClaim, ClaimLensClaimElement, ClaimLensPatent
 
@@ -23,7 +24,7 @@ COMPANY_SAMPLE_LIMIT = 500
 
 
 @router.get("/")
-async def get_stats():
+async def get_stats(db: Session = Depends(get_db)):
     """Return Pinecone namespace stats and ClaimLens persistence stats."""
     try:
         pc = Pinecone(api_key=settings.pinecone_api_key)
@@ -38,8 +39,8 @@ async def get_stats():
         company_namespace = settings.rag_namespace if rag_namespace["vector_count"] > 0 else ""
         company_sample_limit = COMPANY_SAMPLE_LIMIT if company_namespace else 0
         companies = _company_breakdown(index, company_namespace, limit=company_sample_limit)
-        claimlens_stats = _claimlens_db_stats()
-        auto_ingest_stats = _auto_ingest_stats()
+        claimlens_stats = _claimlens_db_stats(db)
+        auto_ingest_stats = _auto_ingest_stats(db)
 
         return {
             "index_name": settings.pinecone_index_name,
@@ -116,26 +117,25 @@ def _list_namespace_ids(index: Any, namespace: str, limit: int) -> list[str]:
     return ids
 
 
-def _claimlens_db_stats() -> dict[str, int]:
-    with SessionLocal() as db:
-        patents_count = db.query(func.count(ClaimLensPatent.id)).scalar() or 0
-        claims_count = db.query(func.count(ClaimLensClaim.id)).scalar() or 0
-        active_claims_count = (
-            db.query(func.count(ClaimLensClaim.id))
-            .filter(ClaimLensClaim.status == "active")
-            .scalar()
-            or 0
-        )
-        independent_claims_count = (
-            db.query(func.count(ClaimLensClaim.id))
-            .filter(ClaimLensClaim.is_independent.is_(True))
-            .scalar()
-            or 0
-        )
-        claim_elements_count = db.query(func.count(ClaimLensClaimElement.id)).scalar() or 0
-        patents_with_claims_count = (
-            db.query(func.count(distinct(ClaimLensClaim.patent_id))).scalar() or 0
-        )
+def _claimlens_db_stats(db: Session) -> dict[str, int]:
+    patents_count = db.query(func.count(ClaimLensPatent.id)).scalar() or 0
+    claims_count = db.query(func.count(ClaimLensClaim.id)).scalar() or 0
+    active_claims_count = (
+        db.query(func.count(ClaimLensClaim.id))
+        .filter(ClaimLensClaim.status == "active")
+        .scalar()
+        or 0
+    )
+    independent_claims_count = (
+        db.query(func.count(ClaimLensClaim.id))
+        .filter(ClaimLensClaim.is_independent.is_(True))
+        .scalar()
+        or 0
+    )
+    claim_elements_count = db.query(func.count(ClaimLensClaimElement.id)).scalar() or 0
+    patents_with_claims_count = (
+        db.query(func.count(distinct(ClaimLensClaim.patent_id))).scalar() or 0
+    )
 
     return {
         "patents": int(patents_count),
@@ -147,15 +147,14 @@ def _claimlens_db_stats() -> dict[str, int]:
     }
 
 
-def _auto_ingest_stats() -> dict[str, int | bool]:
+def _auto_ingest_stats(db: Session) -> dict[str, int | bool]:
     now = datetime.now(timezone.utc)
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    with SessionLocal() as db:
-        daily_calls = _sum_auto_ingest_calls(db, day_start)
-        monthly_calls = _sum_auto_ingest_calls(db, month_start)
-        total_runs = db.query(func.count(AutoIngestCache.id)).scalar() or 0
+    daily_calls = _sum_auto_ingest_calls(db, day_start)
+    monthly_calls = _sum_auto_ingest_calls(db, month_start)
+    total_runs = db.query(func.count(AutoIngestCache.id)).scalar() or 0
 
     return {
         "enabled": settings.auto_ingest_enabled,

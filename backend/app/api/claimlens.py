@@ -1,13 +1,14 @@
 import json
 from dataclasses import dataclass
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from app.core.claimlens.vector_search import search_claim_candidates
 from app.core.claimlens.workflow import run_claimlens_v1_workflow
 from app.core.patent_query_agent import build_patent_query_plan
-from app.db.database import SessionLocal
+from app.db.database import get_db
 from app.ingestion.auto_ingest import maybe_auto_ingest_for_claimlens
 from app.models.claimlens_api import ClaimLensAgentEvent, ClaimLensAnalysisRequest
 from app.services.claimlens_service import ClaimLensAnalysisService
@@ -25,18 +26,19 @@ def _encode_sse(event: ClaimLensAgentEvent) -> str:
 @router.post("/stream")
 async def stream_claimlens_analysis(
     request: ClaimLensAnalysisRequest,
+    db: Session = Depends(get_db),
 ) -> StreamingResponse:
     return StreamingResponse(
-        _stream_analysis(request),
+        _stream_analysis(request, db),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def _build_analysis_service() -> ClaimLensAnalysisService:
+def _build_analysis_service(db: Session) -> ClaimLensAnalysisService:
     return ClaimLensAnalysisService(
         query_plan_builder=build_patent_query_plan,
-        workflow_runner=_run_workflow,
+        workflow_runner=lambda request, query: _run_workflow(request, query, db),
         quality_evaluator=_evaluate_search_quality,
         candidate_event_builder=_candidate_event,
         auto_ingest=maybe_auto_ingest_for_claimlens,
@@ -44,22 +46,25 @@ def _build_analysis_service() -> ClaimLensAnalysisService:
     )
 
 
-async def _stream_analysis(request: ClaimLensAnalysisRequest):
-    async for event in _build_analysis_service().stream(request):
+async def _stream_analysis(request: ClaimLensAnalysisRequest, db: Session):
+    async for event in _build_analysis_service(db).stream(request):
         yield event
 
 
-def _run_workflow(request: ClaimLensAnalysisRequest, claim_search_query: str) -> dict:
-    with SessionLocal() as db:
-        return run_claimlens_v1_workflow(
-            request.product_description,
-            technical_domain=request.technical_domain,
-            candidate_searcher=lambda query: search_claim_candidates(
-                db,
-                claim_search_query or query,
-                top_k=request.top_k,
-            ),
-        )
+def _run_workflow(
+    request: ClaimLensAnalysisRequest,
+    claim_search_query: str,
+    db: Session,
+) -> dict:
+    return run_claimlens_v1_workflow(
+        request.product_description,
+        technical_domain=request.technical_domain,
+        candidate_searcher=lambda query: search_claim_candidates(
+            db,
+            claim_search_query or query,
+            top_k=request.top_k,
+        ),
+    )
 
 
 def _candidate_event(state: dict) -> ClaimLensAgentEvent:

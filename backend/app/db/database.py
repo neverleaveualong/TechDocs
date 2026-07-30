@@ -1,4 +1,5 @@
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -31,6 +32,19 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Provide a transaction-scoped session for non-request application work."""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def init_db():
     # 모델들을 임포트하여 Base.metadata.create_all 이 모든 테이블을 생성할 수 있도록 함
     from app.models.feedback import QueryLog, Feedback
@@ -58,4 +72,3 @@ def init_db():
                     tokenize='unicode61'
                 );
             """))
-
