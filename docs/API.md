@@ -52,7 +52,7 @@
 
 ## 3. 서버 상태 확인
 
-### `GET /health/`
+### 3.1 `GET /health/`
 
 - 목적:
   - 애플리케이션 프로세스가 요청을 처리할 수 있는지 확인합니다.
@@ -70,7 +70,7 @@
 
 ## 4. KIPRIS 특허 검색
 
-### `POST /api/patents/search`
+### 4.1 `POST /api/patents/search`
 
 - 목적:
   - KIPRIS API에서 출원인과 기간 조건으로 특허 목록을 조회합니다.
@@ -121,7 +121,7 @@
 
 ## 5. 특허 데이터 수집
 
-### `POST /api/ingest/`
+### 5.1 `POST /api/ingest/`
 
 - 목적:
   - KIPRIS 특허를 수집하고 검색 및 ClaimLens 분석에 사용할 수 있도록 저장합니다.
@@ -167,7 +167,7 @@
 
 ## 6. 동기 자연어 RAG 검색
 
-### `POST /api/search/search`
+### 6.1 `POST /api/search/search`
 
 - 목적:
   - 자연어 질문을 특허 검색과 근거 기반 답변 생성으로 처리합니다.
@@ -219,7 +219,7 @@
 
 ## 7. RAG 검색 스트리밍
 
-### `POST /api/search/stream`
+### 7.1 `POST /api/search/stream`
 
 - 목적:
   - 검색 계획, Agent 판단, 자동 수집, 출처, 답변 조각을 실시간으로 전달합니다.
@@ -267,7 +267,7 @@
 
 ## 8. 유사 문서 검색
 
-### `POST /api/search/similarity`
+### 8.1 `POST /api/search/similarity`
 
 - 목적:
   - LLM 답변 생성 없이 유사 특허 문서만 조회합니다.
@@ -289,7 +289,7 @@
 
 ## 9. ClaimLens 분석 스트리밍
 
-### `POST /api/claimlens/stream`
+### 9.1 `POST /api/claimlens/stream`
 
 - 목적:
   - 제품 설명과 특허 청구항 구성요소를 비교해 기술 검토 초안을 생성합니다.
@@ -364,7 +364,7 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
 
 ## 10. 통계 조회
 
-### `GET /api/stats/`
+### 10.1 `GET /api/stats/`
 
 - 목적:
   - 벡터 저장소, 회사별 특허 샘플, ClaimLens 영속 데이터, 자동 수집 현황을 한 번에 조회합니다.
@@ -408,7 +408,7 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
 
 ## 11. 피드백 저장
 
-### `POST /api/feedback`
+### 11.1 `POST /api/feedback`
 
 - 목적:
   - 검색 결과에 대한 사용자 평가와 의견을 QueryLog에 연결해 저장합니다.
@@ -445,7 +445,7 @@ data: {"type":"step_started","step":"input_analysis","message":"..."}
 
 ## 12. 피드백 통계
 
-### `GET /api/feedback/stats`
+### 12.1 `GET /api/feedback/stats`
 
 - 목적:
   - 전체 QueryLog, 피드백 수, 긍정 비율, 최근 부정 피드백을 조회합니다.
