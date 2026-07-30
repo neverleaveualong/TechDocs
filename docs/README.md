@@ -5,6 +5,10 @@
 
 ## 문서 목록
 
+- [프론트엔드 기술 문서](FRONTEND.md)
+  - 화면 책임, React Query, 스트림 Hook, 프론트엔드 상태관리를 정리합니다.
+- [AI Agent 백엔드 기술 문서](BACKEND.md)
+  - 자연어 검색, 자동 수집, ClaimLens, 계층별 책임을 정리합니다.
 - [API 설계서](API.md)
   - 현재 API 엔드포인트와 요청·응답 계약을 정리하는 문서입니다.
 - [DB 설계서 및 ERD](DATABASE.md)
