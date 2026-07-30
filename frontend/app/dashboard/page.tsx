@@ -1,33 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { getStats } from "@/lib/api";
 import type { Stats } from "@/types/stats";
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState("");
   const [showAll, setShowAll] = useState(false);
 
-  const fetchStats = async () => {
-    try {
-      const data = await getStats();
-      setStats(data);
-      setError(null);
-      setLastUpdated(new Date().toLocaleTimeString("ko-KR"));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "통계 조회 실패");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    data: stats,
+    error,
+    isLoading,
+    isFetching,
+    dataUpdatedAt,
+    refetch,
+  } = useQuery<Stats, Error>({
+    queryKey: ["stats"],
+    queryFn: getStats,
+  });
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  const lastUpdated = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString("ko-KR")
+    : "";
+  const errorMessage = error?.message ?? "통계 조회 실패";
 
   const totalPatents = stats?.companies.reduce((sum, company) => sum + company.patent_count, 0) ?? 0;
   const totalCompanies = stats?.companies.length ?? 0;
@@ -57,14 +54,11 @@ export default function DashboardPage() {
                 <span className="hidden text-[11px] text-gray-400 sm:block">마지막 조회: {lastUpdated}</span>
               )}
               <button
-                onClick={() => {
-                  setIsLoading(true);
-                  fetchStats();
-                }}
-                disabled={isLoading}
+                onClick={() => void refetch()}
+                disabled={isFetching}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 transition-colors hover:bg-teal-100 disabled:opacity-50"
               >
-                <i className={`ri-refresh-line ${isLoading ? "animate-spin" : ""}`} />
+                <i className={`ri-refresh-line ${isFetching ? "animate-spin" : ""}`} />
                 새로고침
               </button>
             </div>
@@ -78,7 +72,7 @@ export default function DashboardPage() {
             <i className="ri-error-warning-line mt-0.5 shrink-0 text-lg text-red-400" />
             <div>
               <p className="mb-0.5 font-medium text-red-700">통계 조회 실패</p>
-              <p className="text-xs text-red-600">{error}</p>
+              <p className="text-xs text-red-600">{errorMessage}</p>
             </div>
           </div>
         )}
