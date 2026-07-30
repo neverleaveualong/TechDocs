@@ -137,11 +137,13 @@ class SearchApiFlowTest(unittest.IsolatedAsyncioTestCase):
                         events.append(json.loads(line))
             
             types = [e.get("type") for e in events]
+            self.assertEqual(types[0], "query_plan")
             self.assertIn("query_plan", types)
             self.assertIn("agent_decision", types)
             self.assertIn("search_quality", types)
             self.assertIn("agent_completed", types)
-            self.assertIn("done", types)
+            self.assertLess(types.index("sources"), types.index("done"))
+            self.assertEqual(types[-1], "done")
         finally:
             search_api.build_patent_query_plan = original_build_plan
             search_api.rag_pipeline.prepare_search = original_prepare
