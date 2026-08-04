@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import SearchBar from "@/components/search/SearchBar";
 import AiAnswer from "@/components/search/AiAnswer";
 import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
+import PageHeader from "@/components/common/PageHeader";
+import StatusAlert from "@/components/common/StatusAlert";
 import AgentTimeline from "@/components/search/AgentTimeline";
 import ClaimLensResult, { AutoIngestDebugPanel, getToolResultArray } from "@/components/search/ClaimLensResult";
 import type { ClaimLensCandidate } from "@/types/claimlens";
 import { useClaimLensStream } from "@/hooks/useClaimLensStream";
+import { useSearchAutoScroll } from "@/hooks/useSearchAutoScroll";
 import { useSearchStream } from "@/hooks/useSearchStream";
 
 type SearchMode = "rag" | "claimlens";
@@ -42,44 +45,14 @@ export default function SearchPage() {
   const isStreaming = mode === "rag" && ragStream.isStreaming;
   const error = mode === "rag" ? ragStream.error : claimLensStream.error;
 
-  const timelineRef = useRef<HTMLDivElement>(null);
-  const resultRef = useRef<HTMLDivElement>(null);
-
-  // 1. 오케스트레이션 타임라인 활성화 시 해당 영역의 가장 하단까지 자동 스크롤
-  useEffect(() => {
-    const hasEvents = ragEvents.length > 0 || claimLensEvents.length > 0;
-    if (isLoading && hasEvents) {
-      setTimeout(() => {
-        timelineRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      }, 100);
-    }
-  }, [ragEvents.length, claimLensEvents.length, isLoading]);
-
-  // 2. 검색 결과가 나오면 결과 영역으로 자동 스크롤
-  const hasScrolledToResult = useRef(false);
   const hasReport = claimLensEvents.some((event) => event.type === "final_report");
-  useEffect(() => {
-    const hasResult = streamedAnswer || streamedSources.length > 0 || hasReport;
-    if (!isLoading && hasResult) {
-      if (!hasScrolledToResult.current) {
-        setTimeout(() => {
-          resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 150);
-        hasScrolledToResult.current = true;
-      }
-    } else {
-      if (isLoading) {
-        hasScrolledToResult.current = false;
-      }
-    }
-  }, [streamedAnswer, streamedSources.length, hasReport, isLoading]);
-
-  // 3. 답변 스트리밍 중 글자 수 증가에 맞춰 스크롤을 실시간으로 하단으로 동기화
-  useEffect(() => {
-    if (isStreaming && streamedAnswer) {
-      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
-  }, [streamedAnswer, isStreaming]);
+  const { timelineRef, resultRef } = useSearchAutoScroll({
+    eventCount: ragEvents.length + claimLensEvents.length,
+    isLoading,
+    hasResult: Boolean(streamedAnswer || streamedSources.length > 0 || hasReport),
+    isStreaming,
+    streamedAnswer,
+  });
 
   const handleSearch = (query: string) => {
     setActiveQuery(query);
@@ -105,25 +78,15 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 shadow-sm">
-                <i className={mode === "rag" ? "ri-robot-line text-sm text-white" : "ri-scales-3-line text-sm text-white"} />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
-                  {mode === "rag" ? "특허 검색 (RAG)" : "특허 침해 분석 (AI AGENT)"}
-                </h1>
-                <p className="mt-0.5 text-xs font-medium text-gray-400">
-                  {mode === "rag" ? "자연어 질문으로 관련 특허를 찾고 핵심 내용을 요약합니다." : "제품 기술 설명과 특허 청구범위를 대조하여 침해 위험을 분석합니다."}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        icon={mode === "rag" ? "ri-robot-line" : "ri-scales-3-line"}
+        title={mode === "rag" ? "특허 검색 (RAG)" : "특허 침해 분석 (AI AGENT)"}
+        description={
+          mode === "rag"
+            ? "자연어 질문으로 관련 특허를 찾고 핵심 내용을 요약합니다."
+            : "제품 기술 설명과 특허 청구범위를 대조하여 침해 위험을 분석합니다."
+        }
+      />
 
       <main className="px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
@@ -179,13 +142,9 @@ export default function SearchPage() {
           {isLoading && mode === "rag" && <LoadingSpinner message="특허를 검색하는 중입니다..." />}
 
           {error && (
-            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              <i className="ri-error-warning-line mt-0.5 shrink-0 text-lg text-red-400" />
-              <div>
-                <p className="mb-0.5 font-medium">{mode === "rag" ? "검색 오류" : "ClaimLens 오류"}</p>
-                <p className="text-red-600">{error}</p>
-              </div>
-            </div>
+            <StatusAlert title={mode === "rag" ? "검색 오류" : "ClaimLens 오류"}>
+              {error}
+            </StatusAlert>
           )}
 
           {mode === "rag" && (streamedAnswer || streamedSources.length > 0 || ragEvents.length > 0) && (

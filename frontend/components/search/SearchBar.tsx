@@ -28,6 +28,9 @@ export default function SearchBar({
 
   return (
     <form onSubmit={handleSubmit}>
+      <label htmlFor="search-input" className="sr-only">
+        특허 검색어
+      </label>
       <div className="relative">
         <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg pointer-events-none" />
         <input
@@ -37,6 +40,7 @@ export default function SearchBar({
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
           disabled={isLoading}
+          aria-describedby="search-help"
           className="w-full pl-12 pr-28 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none transition-all focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
         />
         <button
@@ -47,6 +51,7 @@ export default function SearchBar({
             onCancel();
           }}
           disabled={!isLoading && !query.trim()}
+          aria-label={isLoading && onCancel ? "검색 중단" : buttonLabel}
           className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold rounded-lg transition-all whitespace-nowrap bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-sm hover:from-teal-600 hover:to-teal-700 disabled:from-gray-200 disabled:to-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
         >
           {isLoading ? (
@@ -62,6 +67,9 @@ export default function SearchBar({
           )}
         </button>
       </div>
+      <p id="search-help" className="sr-only">
+        자연어로 찾고 싶은 특허 기술이나 비교할 제품 기능을 입력하세요.
+      </p>
     </form>
   );
 }

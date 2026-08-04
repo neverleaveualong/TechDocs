@@ -1,31 +1,25 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const mainMenu = [
-  { href: "/", icon: "ri-home-line", activeIcon: "ri-home-fill", label: "홈", exact: true },
-  { href: "/search", icon: "ri-robot-line", activeIcon: "ri-robot-fill", label: "AI 특허 검색" },
-  { href: "/dashboard", icon: "ri-bar-chart-line", activeIcon: "ri-bar-chart-fill", label: "대시보드" },
-];
-
-
-const bottomMenu = [
-  { href: "/help", icon: "ri-question-line", activeIcon: "ri-question-fill", label: "도움말" },
-];
+import {
+  isNavigationActive,
+  primaryNavigation,
+  type NavigationItem,
+  utilityNavigation,
+} from "@/components/layout/navigation";
 
 export default function Sidebar() {
   const pathname = usePathname();
 
-  const isActive = (href: string, exact = false) =>
-    exact ? pathname === href : pathname.startsWith(href);
-
-  const renderLink = (item: { href: string; icon: string; activeIcon: string; label: string; exact?: boolean }) => {
-    const active = isActive(item.href, item.exact);
+  const renderLink = (item: NavigationItem) => {
+    const active = isNavigationActive(pathname, item);
     return (
       <li key={item.href}>
         <Link
           href={item.href}
+          aria-current={active ? "page" : undefined}
           className={`
             group flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium
             transition-all duration-150
@@ -47,11 +41,11 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 z-40 w-60 h-screen bg-white border-r border-gray-200 flex flex-col">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-60 flex-col border-r border-gray-200 bg-white lg:flex">
       {/* 로고 */}
       <div className="px-5 pt-6 pb-5">
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="/favicon.svg" alt="TechDocs" className="w-8 h-8 rounded-lg" />
+          <Image src="/favicon.svg" alt="" width={32} height={32} className="rounded-lg" priority />
           <div>
             <span className="text-[15px] font-bold tracking-tight block">
               <span className="text-teal">T</span>
@@ -74,7 +68,7 @@ export default function Sidebar() {
           Menu
         </p>
         <ul className="space-y-1">
-          {mainMenu.map(renderLink)}
+          {primaryNavigation.map(renderLink)}
         </ul>
       </nav>
 
@@ -82,7 +76,7 @@ export default function Sidebar() {
       <div className="mx-4 border-t border-gray-100" />
       <div className="px-3 py-3">
         <ul className="space-y-1">
-          {bottomMenu.map(renderLink)}
+          {utilityNavigation.map(renderLink)}
         </ul>
       </div>
     </aside>

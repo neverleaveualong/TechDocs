@@ -52,3 +52,14 @@ body {
 .animate-slide-up-1 { animation: slideUp 0.5s ease 0.1s both; }
 .animate-slide-up-2 { animation: slideUp 0.5s ease 0.2s both; }
 .animate-slide-up-3 { animation: slideUp 0.5s ease 0.3s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

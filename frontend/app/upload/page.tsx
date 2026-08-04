@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import PageHeader from "@/components/common/PageHeader";
+import StatusAlert from "@/components/common/StatusAlert";
 import { ingestPatents } from "@/lib/api";
 
 const presetCompanies = [
@@ -37,20 +39,11 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 페이지 헤더 */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm">
-              <i className="ri-download-cloud-2-line text-white text-sm" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">데이터 수집</h1>
-          </div>
-          <p className="text-sm text-gray-500 hidden sm:block pl-11">
-            KIPRIS 공공 API에서 특허를 수집하여 Pinecone 벡터 DB에 저장합니다
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        icon="ri-download-cloud-2-line"
+        title="데이터 수집"
+        description="KIPRIS 공공 API에서 특허를 수집하여 Pinecone 벡터 DB에 저장합니다."
+      />
 
       <main className="px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <div className="space-y-5">
@@ -147,13 +140,7 @@ export default function UploadPage() {
 
           {/* 에러 */}
           {error && (
-            <div className="animate-fade-in flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-              <i className="ri-error-warning-line text-red-400 text-lg mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium mb-0.5">수집 실패</p>
-                <p className="text-red-600">{error}</p>
-              </div>
-            </div>
+            <StatusAlert title="수집 실패">{error}</StatusAlert>
           )}
 
           {/* 수집 결과 */}
