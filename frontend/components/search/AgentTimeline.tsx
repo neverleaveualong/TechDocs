@@ -3,25 +3,21 @@
 import { useState } from "react";
 import type { SearchStreamEvent } from "@/types/search";
 
-const agentBadgeMap: Record<string, string> = {
-  "Query Analyzer": "검색어 분석 에이전트",
-  "Supervisor": "오케스트레이터",
-  "Retriever": "검색 에이전트",
-  "Generator": "답변 생성 에이전트",
-  "Ingest Agent": "수집 에이전트"
-};
-
-const actionTitleMap: Record<string, string> = {
-  "search": "특허 검색 실행",
-  "ingest": "특허 실시간 수집",
-  "generate": "AI 답변 생성 중"
+const ipcCategoryMap: Record<string, string> = {
+  H01M: "H01M (2차전지/배터리 기술)",
+  G06N: "G06N (인공지능/신경망 기술)",
+  G06F: "G06F (데이터 처리 시스템)",
+  H04L: "H04L (디지털 정보 통신)",
+  A61B: "A61B (의료 진단 기술)",
+  B60L: "B60L (전기차 구동 제어)",
 };
 
 export default function AgentTimeline({ events }: { events: SearchStreamEvent[] }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [showAllSteps, setShowAllSteps] = useState(false);
 
-  // 타임라인에 표시할 이벤트만 필터링
-  const timelineEvents = events.filter((e) =>
+  // 1. 타임라인 표시 가능 이벤트 1차 필터링
+  const rawTimelineEvents = events.filter((e) =>
     [
       "query_plan",
       "agent_decision",
@@ -34,322 +30,258 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
     ].includes(e.type)
   );
 
+  // 2. ⚡ [중복/우회 이벤트 강력 디두플리케이션]
+  const timelineEvents = rawTimelineEvents.filter((event, index, arr) => {
+    if (index === 0) return true;
+    const prev = arr[index - 1] as Record<string, any>;
+    const curr = event as Record<string, any>;
+
+    if (curr.type === prev.type && curr.agent === prev.agent) return false;
+    if (curr.type === "agent_action" && prev.type === "agent_action") return false;
+    if (curr.type === "agent_completed" && prev.type === "agent_completed") return false;
+
+    return true;
+  });
+
   if (timelineEvents.length === 0) return null;
 
-  // 전체 작업 완료 여부 확인
   const isAllDone = events.some((e) => e.type === "done");
   const hasError = events.some((e) => e.type === "error");
 
-  // 가리기 규칙: 4개 이상일 때 접혀있다면 최신 4개만 노출
-  const shouldTruncate = timelineEvents.length > 4;
-  const visibleEvents = shouldTruncate && !isExpanded 
-    ? timelineEvents.slice(-4) 
-    : timelineEvents;
+  const hasTooManySteps = timelineEvents.length > 3;
+  const hiddenCount = hasTooManySteps ? timelineEvents.length - 3 : 0;
+
+  const visibleEvents = showAllSteps || !hasTooManySteps
+    ? timelineEvents
+    : timelineEvents.slice(timelineEvents.length - 3);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md">
-      <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+    <div className="rounded-xl border border-gray-200/80 bg-white p-4.5 shadow-xs transition-all duration-300 space-y-3">
+      {/* 📌 헤더 */}
+      <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-teal-50 text-teal-600">
-            <i className="ri-route-line text-sm" />
+          <div className="flex h-6.5 w-6.5 items-center justify-center rounded-lg bg-teal-50 text-teal-700 border border-teal-100">
+            <i className="ri-list-check-2 text-xs" />
           </div>
-          <h4 className="text-sm font-bold text-gray-900">Multi-Agent 오케스트레이션</h4>
+          <h4 className="text-xs font-bold text-gray-900">특허 분석 진행 상황</h4>
         </div>
-        <div className="flex items-center gap-1.5">
+
+        <div className="flex items-center gap-2">
           {hasError ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600 border border-red-100">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 border border-red-150">
               오류 발생
             </span>
           ) : isAllDone ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700 border border-green-100 animate-fade-in">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              모든 작업 완료
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-150">
+              ✓ 분석 완료
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-600 border border-teal-100 animate-pulse">
+            <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700 border border-teal-150 animate-pulse">
               <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-ping" />
-              에이전트 분석 중
+              분석 진행 중
             </span>
           )}
         </div>
       </div>
 
-      {/* 접혀있을 때 숨겨진 항목의 수 표시와 더보기 버튼 */}
-      {shouldTruncate && (
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-gray-50 hover:bg-teal-50/50 border border-gray-200 hover:border-teal-200 rounded-lg text-xs font-bold text-teal-700 transition-all shadow-sm"
-          >
-            {isExpanded ? (
-              <>
-                <i className="ri-arrow-up-double-line text-sm" />
-                워크플로우 접기 (전체 {timelineEvents.length}개 단계)
-              </>
-            ) : (
-              <>
-                <i className="ri-arrow-down-double-line text-sm animate-bounce" />
-                이전 실행 단계 ({timelineEvents.length - 4}개) 더보기
-              </>
-            )}
-          </button>
-        </div>
+      {/* 🕒 이전 단계 접기/펼치기 */}
+      {hasTooManySteps && !showAllSteps && (
+        <button
+          onClick={() => setShowAllSteps(true)}
+          className="w-full flex items-center justify-center gap-2 py-1 text-[11px] font-semibold text-gray-400 hover:text-teal-700 transition-colors border-y border-dashed border-gray-200 bg-gray-50/50 rounded-md"
+        >
+          <span>--- 이전 {hiddenCount}개 진행 단계 접혀있음 (클릭하여 펼치기) ---</span>
+        </button>
       )}
 
-      <div className="relative border-l-2 border-gray-100 pl-4 ml-3.5 space-y-6 transition-all duration-300">
+      {/* 🕒 연속적인 1, 2, 3 정갈한 순번 카드 표시 */}
+      <div className="space-y-2.5">
         {visibleEvents.map((event, idx) => {
-          // 원래 배열(timelineEvents)에서의 실제 인덱스
-          const actualIdx = shouldTruncate && !isExpanded 
-            ? timelineEvents.length - 4 + idx 
-            : idx;
-          const isLast = actualIdx === timelineEvents.length - 1;
-          const isActiveNode = isLast && !isAllDone && !hasError;
+          // 건너뛰지 않는 연속 정순 인덱스
+          const displayStepNumber = (showAllSteps || !hasTooManySteps)
+            ? idx + 1
+            : (timelineEvents.length - 3) + idx + 1;
 
-          let icon = "ri-checkbox-blank-circle-line";
-          let iconColor = "text-gray-400 bg-gray-50 border-gray-200";
-          let title = "";
-          let rawBadge = "";
-          let renderingDetails = null;
+          const isLast = idx === visibleEvents.length - 1;
+          const isActive = isLast && !isAllDone && !hasError;
+          const anyEvent = event as Record<string, any>;
 
           if (event.type === "query_plan") {
-            icon = "ri-compass-3-line";
-            iconColor = "text-teal-600 bg-teal-50 border-teal-100";
-            title = "검색 계획 수립 완료";
-            rawBadge = "Query Analyzer";
-            
-            const data = event.data || {};
+            const data = anyEvent.data || {};
             const searchKeywords = (data.searchKeywords || data.search_keywords || []) as string[];
             const ipcCandidates = (data.ipcCandidates || data.ipc_candidates || []) as string[];
-            const kiprisQueries = (data.kiprisQueries || data.kipris_queries || []) as string[];
 
-            renderingDetails = (
-              <div className="mt-2 space-y-1.5">
-                <p className="text-xs text-gray-500 leading-relaxed font-medium">
-                  분석 요약: <span className="text-gray-700">{String(data.summary || "")}</span>
-                </p>
-                {searchKeywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1 items-center">
-                    <span className="text-[10px] text-gray-400 font-medium shrink-0">분석 키워드:</span>
-                    {searchKeywords.map((kw, i) => (
-                      <span key={i} className="rounded bg-teal-50/70 border border-teal-100/50 px-1.5 py-0.5 text-[9px] font-medium text-teal-700">
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {ipcCandidates.length > 0 && (
-                  <div className="flex flex-wrap gap-1 items-center">
-                    <span className="text-[10px] text-gray-400 font-medium shrink-0">추천 IPC 분류:</span>
-                    {ipcCandidates.map((ipc, i) => (
-                      <span key={i} className="rounded bg-gray-100 border border-gray-200/50 px-1.5 py-0.5 text-[9px] font-mono font-medium text-gray-600">
-                        {ipc}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {kiprisQueries.length > 0 && (
-                  <div className="flex flex-wrap gap-1 items-center">
-                    <span className="text-[10px] text-gray-400 font-medium shrink-0">KIPRIS 조회 쿼리:</span>
-                    {kiprisQueries.slice(0, 3).map((kq, i) => (
-                      <span key={i} className="rounded bg-blue-50 border border-blue-100/50 px-1.5 py-0.5 text-[9px] font-medium text-blue-700">
-                        {kq}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          } else if (event.type === "agent_decision") {
-            icon = "ri-brain-line";
-            iconColor = "text-indigo-600 bg-indigo-50 border-indigo-100";
-            title = "의사결정 진행";
-            rawBadge = "Supervisor";
-
-            const nextAction = event.decision?.next_action || "";
-            const cleanAction = actionTitleMap[nextAction.toLowerCase()] || nextAction;
-            
-            const isIngest = nextAction.toLowerCase() === "ingest";
-            const isSearch = nextAction.toLowerCase() === "search";
-            const isGenerate = nextAction.toLowerCase() === "generate";
-
-            const actionBadgeColor = isSearch
-              ? "bg-teal-50 text-teal-700 border-teal-200"
-              : isIngest
-              ? "bg-amber-50 text-amber-700 border-amber-200"
-              : isGenerate
-              ? "bg-rose-50 text-rose-700 border-rose-200"
-              : "bg-gray-50 text-gray-700 border-gray-200";
-
-            renderingDetails = (
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-400 font-medium">행동 지침:</span>
-                  <span className={`rounded border px-2 py-0.5 text-[10px] font-bold tracking-wide ${actionBadgeColor}`}>
-                    {cleanAction}
-                  </span>
-                  {!!event.decision?.parameters?.strategy && (
-                    <span className="rounded bg-gray-50 border border-gray-150 px-1.5 py-0.5 text-[9px] font-medium text-gray-500 font-mono">
-                      {String(event.decision.parameters.strategy)} (k={String(event.decision.parameters.top_k || 5)})
-                    </span>
+            return (
+              <TimelineCard key={idx} stepNumber={displayStepNumber} title="질문 파싱 & 키워드 수립" isActive={isActive}>
+                <div className="space-y-1 text-xs text-gray-700">
+                  {data.summary && (
+                    <p className="font-semibold text-gray-900">• 분석 요약: <span className="font-medium text-gray-700">{String(data.summary)}</span></p>
+                  )}
+                  {searchKeywords.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span className="font-bold text-gray-500">• 추출 키워드:</span>
+                      {searchKeywords.map((kw, i) => (
+                        <span key={i} className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-teal-700 border border-teal-100">
+                          #{kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {ipcCandidates.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span className="font-bold text-gray-500">• 특허 분류:</span>
+                      {ipcCandidates.map((ipc, i) => (
+                        <span key={i} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 border border-gray-200">
+                          {ipcCategoryMap[ipc] || ipc}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {event.decision?.reasoning && (
-                  <div className="relative pl-3 border-l-2 border-indigo-200/50">
-                    <p className="text-xs text-gray-500 italic leading-relaxed whitespace-pre-line">
-                      &quot;{event.decision.reasoning}&quot;
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          } else if (event.type === "agent_action") {
-            const agent = event.agent || "";
-            icon = agent === "retriever" ? "ri-search-2-line" : agent === "generator" ? "ri-magic-line" : "ri-play-line";
-            iconColor =
-              agent === "retriever"
-                ? "text-teal-600 bg-teal-50 border-teal-100"
-                : "text-rose-600 bg-rose-50 border-rose-100";
-            
-            rawBadge = agent === "retriever" ? "Retriever" : agent === "generator" ? "Generator" : agent;
-            const friendlyAgentName = agentBadgeMap[rawBadge] || rawBadge;
-            title = `${friendlyAgentName} 실행`;
-            
-            renderingDetails = (
-              <p className="mt-1 text-xs text-gray-600 font-medium leading-relaxed">
-                {event.message || ""}
-              </p>
-            );
-          } else if (event.type === "agent_completed") {
-            const agent = event.agent || "";
-            icon = "ri-checkbox-circle-line";
-            iconColor = "text-green-600 bg-green-50 border-green-100";
-            
-            rawBadge = agent === "retriever" ? "Retriever" : agent === "generator" ? "Generator" : agent;
-            const friendlyAgentName = agentBadgeMap[rawBadge] || rawBadge;
-            title = `${friendlyAgentName} 완료`;
-            
-            const sourceCount = event.payload?.source_count || event.payload?.sources_count;
-            const citationValid = event.payload?.citation_valid;
-
-            renderingDetails = (
-              <div className="mt-1 space-y-1">
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  {event.reasoning || ""}
-                </p>
-                {sourceCount !== undefined && (
-                  <div className="flex gap-2 text-[10px] font-semibold text-gray-400 mt-1">
-                    <span>수집 특허: <strong className="text-gray-600">{String(sourceCount)}건</strong></span>
-                    {citationValid !== undefined && (
-                      <span>
-                        출처 검증: 
-                        <strong className={citationValid ? "text-green-600 ml-1" : "text-amber-600 ml-1"}>
-                          {citationValid ? "통과 (신뢰)" : "미달 (할루시네이션 주의)"}
-                        </strong>
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          } else if (event.type === "auto_ingest_started") {
-            icon = "ri-download-cloud-2-line";
-            iconColor = "text-amber-600 bg-amber-50 border-amber-100";
-            title = "KIPRIS 특허 실시간 수집 시작";
-            rawBadge = "Ingest Agent";
-            renderingDetails = (
-              <p className="mt-1 text-xs text-gray-600 font-medium leading-relaxed">
-                {event.message || ""}
-              </p>
-            );
-          } else if (event.type === "auto_ingest_completed") {
-            icon = "ri-checkbox-circle-line";
-            iconColor = "text-green-600 bg-green-50 border-green-100";
-            title = "KIPRIS 특허 실시간 수집 완료";
-            rawBadge = "Ingest Agent";
-            const saved = typeof event.data?.patents_saved === "number" ? event.data.patents_saved : 0;
-            renderingDetails = (
-              <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-                KIPRIS 수집 완료. RAG 인덱싱 및 로컬 DB 저장: <strong className="text-gray-700">{saved}건</strong>
-              </p>
-            );
-          } else if (event.type === "retry_search") {
-            icon = "ri-refresh-line";
-            iconColor = "text-blue-600 bg-blue-50 border-blue-100";
-            title = "특허 재수집 및 검색 재시도";
-            rawBadge = "Retriever";
-            renderingDetails = (
-              <p className="mt-1 text-xs text-gray-600 font-medium leading-relaxed">
-                {event.message || ""}
-              </p>
-            );
-          } else if (event.type === "search_quality") {
-            icon = "ri-pulse-line";
-            iconColor = "text-purple-600 bg-purple-50 border-purple-100";
-            title = "검색 품질 평가 완료";
-            rawBadge = "Retriever";
-            
-            const bestScore = typeof event.data?.best_score === "number" ? event.data.best_score : undefined;
-            const qualityReason = String(event.data?.reason || "unknown");
-            const isLowScore = bestScore !== undefined && bestScore < 0.05;
-
-            renderingDetails = (
-              <div className="mt-1.5 flex flex-wrap gap-2 items-center">
-                <span className="text-xs text-gray-400 font-medium">품질 판정:</span>
-                <span className={`rounded border px-1.5 py-0.2 text-[9px] font-bold ${
-                  isLowScore ? "bg-red-50 text-red-700 border-red-150" : "bg-purple-50 text-purple-700 border-purple-150"
-                }`}>
-                  {qualityReason}
-                </span>
-                {bestScore !== undefined && (
-                  <span className="font-mono text-[10px] text-gray-500">
-                    최고 관련도 점수: <strong className="text-gray-700">{Math.min(Math.round((bestScore / 0.03278) * 100), 100)}%</strong>
-                  </span>
-                )}
-              </div>
+              </TimelineCard>
             );
           }
 
-          const friendlyBadge = agentBadgeMap[rawBadge] || rawBadge;
+          if (event.type === "agent_decision") {
+            const decision = anyEvent.decision || {};
+            const nextAction = decision.next_action || "";
+            const isIngest = String(nextAction).toLowerCase() === "ingest";
+            const isSearch = String(nextAction).toLowerCase() === "search";
 
-          return (
-            <div
-              key={idx}
-              className="relative group transition-all animate-fade-in"
-              data-agent-step={event.type}
-              data-agent-name={rawBadge || "unknown"}
-              data-agent-active={isActiveNode ? "true" : "false"}
-              data-agent-status={isActiveNode ? "running" : "completed"}
-            >
-              {/* 왼쪽 타임라인 노드 아이콘 */}
-              <div
-                className={`absolute -left-[29px] top-1 flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition-transform group-hover:scale-110 ${iconColor} ${
-                  isActiveNode ? "animate-pulse ring-2 ring-teal-100 ring-offset-1" : ""
-                }`}
-              >
-                <i className={`${icon} text-[13px] ${isActiveNode && event.type === "agent_action" ? "animate-spin" : ""}`} />
-              </div>
+            return (
+              <TimelineCard key={idx} stepNumber={displayStepNumber} title="탐색 전략 결정" isActive={isActive}>
+                <p className="text-xs text-gray-800 font-medium">
+                  • 다음 작업: <strong className="text-teal-800">{isSearch ? "지식베이스 특허 탐색" : isIngest ? "실시간 KIPRIS 수집" : "답변 및 리포트 가공"}</strong>
+                </p>
+              </TimelineCard>
+            );
+          }
 
-              {/* 타임라인 바디 */}
-              <div className="pl-3.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-gray-800 tracking-tight">
-                    {friendlyBadge ? `${friendlyBadge} - ${title.startsWith(friendlyBadge) ? title.replace(friendlyBadge, "").trim() : title}` : title}
-                  </span>
-                  {isActiveNode && (
-                    <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-1.5 py-0.5 text-[8px] font-bold text-teal-600 border border-teal-150 animate-pulse">
-                      <span className="h-1 w-1 rounded-full bg-teal-500" />
-                      실행 중
-                    </span>
-                  )}
-                </div>
-                {renderingDetails}
-              </div>
-            </div>
-          );
+          if (event.type === "agent_action") {
+            const agent = anyEvent.agent || "";
+            const isRetriever = agent === "retriever";
+
+            return (
+              <TimelineCard key={idx} stepNumber={displayStepNumber} title={isRetriever ? "특허 문서 탐색" : "리포트 가공"} isActive={isActive}>
+                <p className="text-xs text-gray-700 font-medium">
+                  • {isRetriever ? "관련 특허 명세서를 대조 탐색 중입니다." : "검색 및 분석 결과를 정리하여 보고서를 작성 중입니다."}
+                </p>
+              </TimelineCard>
+            );
+          }
+
+          if (event.type === "agent_completed") {
+            const agent = anyEvent.agent || "";
+            const isRetriever = agent === "retriever";
+            const payload = anyEvent.payload || {};
+            const sourceCount = payload.source_count || payload.sources_count;
+
+            return (
+              <TimelineCard key={idx} stepNumber={displayStepNumber} title={isRetriever ? "탐색 완료" : "리포트 작성 완료"} isCompleted>
+                <p className="text-xs text-emerald-800 font-bold">
+                  • {sourceCount !== undefined ? `가장 관련성이 높은 특허 ${String(sourceCount)}건 채택 완료` : "해당 검토 단계 완료"}
+                </p>
+              </TimelineCard>
+            );
+          }
+
+          if (event.type === "auto_ingest_started" || event.type === "auto_ingest_completed") {
+            const isDone = event.type === "auto_ingest_completed";
+            const eventData = anyEvent.data || {};
+            const saved = typeof eventData.patents_saved === "number" ? eventData.patents_saved : 0;
+
+            return (
+              <TimelineCard key={idx} stepNumber={displayStepNumber} title={isDone ? "KIPRIS 자동 수집 완료" : "KIPRIS 자동 수집 시작"} isActive={!isDone && isActive} isCompleted={isDone}>
+                <p className="text-xs text-gray-700">
+                  • {isDone ? `공공 API 연동 특허 ${saved}건 지식베이스 등록 완료` : "KIPRIS API 실시간 수집 실행 중..."}
+                </p>
+              </TimelineCard>
+            );
+          }
+
+          return null;
         })}
       </div>
+
+      {hasTooManySteps && showAllSteps && (
+        <button
+          onClick={() => setShowAllSteps(false)}
+          className="w-full flex items-center justify-center gap-2 py-1 text-[11px] font-semibold text-gray-400 hover:text-teal-700 transition-colors border-y border-dashed border-gray-200 bg-gray-50/50 rounded-md"
+        >
+          <span>--- 최신 3개 단계만 접기 ---</span>
+        </button>
+      )}
+
+      {/* 🛠️ 세부 알고리즘 정보 */}
+      <div className="mt-2 border-t border-gray-100 pt-1.5 flex justify-end">
+        <button
+          onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+          className="text-[10px] font-semibold text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
+        >
+          <i className="ri-code-line text-xs" />
+          {showTechnicalDetails ? "상세 알고리즘 정보 접기" : "상세 알고리즘 정보 보기"}
+        </button>
+      </div>
+
+      {showTechnicalDetails && (
+        <div className="mt-2 rounded-lg bg-gray-900 p-3 font-mono text-[10px] text-gray-300 space-y-1">
+          {timelineEvents.map((e, i) => {
+            const anyE = e as Record<string, any>;
+            return (
+              <div key={i} className="truncate text-gray-400">
+                <span className="text-teal-400">[{e.type}]</span> {JSON.stringify(anyE.data || anyE.decision || anyE.payload || {})}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineCard({
+  stepNumber,
+  title,
+  children,
+  isActive = false,
+  isCompleted = false,
+}: {
+  stepNumber: number;
+  title: string;
+  children: React.ReactNode;
+  isActive?: boolean;
+  isCompleted?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border border-gray-200/80 p-3 transition-all space-y-1 ${
+        isActive
+          ? "bg-teal-50/40"
+          : isCompleted
+          ? "bg-white"
+          : "bg-gray-50/40"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-4.5 w-4.5 items-center justify-center rounded bg-gray-100 text-[10px] font-black text-gray-700 border border-gray-200">
+            {stepNumber}
+          </span>
+          <h5 className="text-xs font-bold text-gray-900">[{title}]</h5>
+        </div>
+        {isActive && (
+          <span className="inline-flex items-center gap-1 rounded bg-teal-100 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 border border-teal-200 animate-pulse">
+            <span className="h-1 w-1 rounded-full bg-teal-600 animate-ping" />
+            진행 중
+          </span>
+        )}
+        {isCompleted && (
+          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-200">
+            ✓ 완료
+          </span>
+        )}
+      </div>
+      <div className="pl-6">{children}</div>
     </div>
   );
 }

@@ -3,23 +3,23 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # OpenAI
-    openai_api_key: str
+    openai_api_key: str = "sk-dummy-local-key"
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
 
     # Pinecone
-    pinecone_api_key: str
+    pinecone_api_key: str = "pc-dummy-local-key"
     pinecone_index_name: str = "techdocs-patents"
     
     # Namespaces
     rag_namespace: str = "techdocs-rag"
     agent_namespace: str = "claimlens-agent"
 
-    # PostgreSQL Database URL
-    database_url: str = "postgresql+psycopg://techdocs:techdocs@localhost:5432/techdocs"
+    # PostgreSQL / SQLite Database URL
+    database_url: str = "sqlite:///./dev.db"
 
     # KIPRIS
-    kipris_api_key: str
+    kipris_api_key: str = "kipris-dummy-local-key"
     kipris_base_url: str = "https://plus.kipris.or.kr/kipo-api/kipi"
 
     # Conservative on-demand ingest limits for portfolio demos.
@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 settings = Settings()
+

@@ -1,21 +1,15 @@
 export interface CompanyStats {
   applicant: string;
   patent_count: number;
-  vector_count: number;
 }
 
-export interface NamespaceStats {
-  namespace: string;
-  vector_count: number;
-}
-
-export interface ClaimLensStats {
-  patents: number;
-  claims: number;
-  active_claims: number;
+export interface SummaryStats {
+  total_patents: number;
+  analyzed_patents: number;
+  analysis_rate: number;
+  total_claims: number;
   independent_claims: number;
   claim_elements: number;
-  patents_with_claims: number;
 }
 
 export interface AutoIngestStats {
@@ -28,19 +22,18 @@ export interface AutoIngestStats {
   total_runs: number;
 }
 
-export interface Stats {
+export interface EngineeringDetails {
   total_vectors: number;
-  dimension: number;
-  index_name: string;
-  company_namespace: string;
-  company_sample_limit: number;
-  company_stats_sampled: boolean;
-  namespaces: {
-    rag: NamespaceStats;
-    agent: NamespaceStats;
-    default: NamespaceStats;
-  };
-  companies: CompanyStats[];
-  claimlens: ClaimLensStats;
-  auto_ingest: AutoIngestStats;
+  rag_vectors: number;
+  agent_vectors: number;
 }
+
+export interface Stats {
+  index_name: string;
+  embedding_model: string;
+  summary: SummaryStats;
+  companies: CompanyStats[];
+  auto_ingest: AutoIngestStats;
+  engineering_details: EngineeringDetails;
+}
+
