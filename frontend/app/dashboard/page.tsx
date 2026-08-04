@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import PageHeader from "@/components/common/PageHeader";
+import StatusAlert from "@/components/common/StatusAlert";
 import { getStats } from "@/lib/api";
 import type { Stats } from "@/types/stats";
 
@@ -35,21 +37,12 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="mb-1 flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 shadow-sm">
-                  <i className="ri-bar-chart-line text-sm text-white" />
-                </div>
-                <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">데이터 검증 대시보드</h1>
-              </div>
-              <p className="hidden pl-11 text-sm text-gray-500 sm:block">
-                RAG 검색과 ClaimLens 저장 상태를 함께 확인합니다.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
+      <PageHeader
+        icon="ri-bar-chart-line"
+        title="데이터 검증 대시보드"
+        description="RAG 검색과 ClaimLens 저장 상태를 함께 확인합니다."
+        actions={
+          <div className="flex items-center gap-3">
               {lastUpdated && (
                 <span className="hidden text-[11px] text-gray-400 sm:block">마지막 조회: {lastUpdated}</span>
               )}
@@ -61,20 +54,13 @@ export default function DashboardPage() {
                 <i className={`ri-refresh-line ${isFetching ? "animate-spin" : ""}`} />
                 새로고침
               </button>
-            </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="space-y-5 px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
         {error && (
-          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm">
-            <i className="ri-error-warning-line mt-0.5 shrink-0 text-lg text-red-400" />
-            <div>
-              <p className="mb-0.5 font-medium text-red-700">통계 조회 실패</p>
-              <p className="text-xs text-red-600">{errorMessage}</p>
-            </div>
-          </div>
+          <StatusAlert title="통계 조회 실패">{errorMessage}</StatusAlert>
         )}
 
         {isLoading && !stats && (

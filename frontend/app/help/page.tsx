@@ -1,4 +1,4 @@
-"use client";
+import PageHeader from "@/components/common/PageHeader";
 
 const pipelineSteps = [
   { icon: "ri-question-line", label: "질문 입력", desc: "사용자가 자연어로 질문을 입력합니다." },
@@ -36,23 +36,11 @@ const faqs = [
 export default function HelpPage() {
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 페이지 헤더 */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">도움말</h1>
-            <p className="mt-1 text-sm text-gray-500 hidden sm:block">
-              TechDocs 플랫폼 사용법과 기술 스택 안내
-            </p>
-          </div>
-          <div className="hidden md:flex items-center gap-2 text-sm text-gray-500">
-            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-              <i className="ri-question-line text-amber-500 text-sm" />
-            </div>
-            가이드
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        icon="ri-question-line"
+        title="도움말"
+        description="TechDocs 플랫폼 사용법과 기술 스택 안내"
+      />
 
       <main className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-6">
         {/* FAQ */}

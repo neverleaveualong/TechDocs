@@ -146,6 +146,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
             <ReactMarkdown
               components={{
                 p({ node, children, ...props }) {
+                  void node;
                   const textContent = String(children);
                   const isIntro = textContent.includes("사용자 질의") || textContent.includes("KIPRIS");
                   
@@ -236,6 +237,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                     <ReactMarkdown
                       components={{
                         ul({ node, children, ...props }) {
+                          void node;
                           return (
                             <ul className="list-none pl-1.5 my-0 space-y-0.5 text-slate-700 font-medium" {...props}>
                               {children}
@@ -243,6 +245,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                           );
                         },
                         li({ node, children, ...props }) {
+                          void node;
                           return (
                             <li className="relative pl-4 text-slate-700 leading-normal text-[13.5px] sm:text-[14.5px] my-0 py-0.5" {...props}>
                               <span className="absolute left-0 top-[6.5px] w-1.5 h-1.5 rounded-full bg-slate-400 select-none" />
@@ -251,6 +254,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                           );
                         },
                         p({ node, children, ...props }) {
+                          void node;
                           return (
                             <p className="my-0.5 text-slate-700 leading-normal text-[13.5px] sm:text-[14.5px] font-medium" {...props}>
                               {children}
@@ -258,6 +262,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
                           );
                         },
                         strong({ node, children, ...props }) {
+                          void node;
                           return (
                             <strong className="font-extrabold text-slate-900 mr-1" {...props}>
                               {children}
@@ -291,6 +296,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
               <ReactMarkdown
                 components={{
                   p({ node, children, ...props }) {
+                    void node;
                     return (
                       <p className="text-slate-850 leading-relaxed text-[14px] sm:text-[15px] font-bold" {...props}>
                         {children}

@@ -1,7 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { useSearchDemo, demoScenarios } from "@/hooks/useSearchDemo";
+import Image from "next/image";
+import HomeSearchDemo from "@/components/home/HomeSearchDemo";
 
 const featureCards = [
   {
@@ -36,8 +35,6 @@ const techTags = [
 ];
 
 export default function HomePage() {
-  const demo = useSearchDemo();
-
   return (
     <div className="w-full">
       {/* ── 히어로 ── */}
@@ -52,7 +49,7 @@ export default function HomePage() {
             {/* 좌측 */}
             <div className="animate-slide-up pt-2">
               <div className="flex items-center gap-3 mb-5">
-                <img src="/favicon.svg" alt="TechDocs" className="w-10 h-10 rounded-xl shadow-lg" />
+                <Image src="/favicon.svg" alt="" width={40} height={40} className="rounded-xl shadow-lg" priority />
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                   <span className="text-teal">T</span>
                   <span className="text-white">ech</span>
@@ -100,123 +97,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 우측 인터랙티브 데모 */}
-            <div className="animate-slide-up-1 hidden lg:block">
-              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 shadow-2xl h-[420px] overflow-hidden flex flex-col">
-                {/* 브라우저 바 */}
-                <div className="flex items-center gap-2 mb-3 shrink-0">
-                  <div className="flex gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-white/20" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-white/20" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-white/20" />
-                  </div>
-                  <div className="flex-1 h-5 bg-white/5 rounded-md flex items-center px-2">
-                    <span className="text-[9px] text-white/20">techdocs.app/search</span>
-                  </div>
-                </div>
-
-                {/* 검색바 */}
-                <div className="relative mb-3 shrink-0">
-                  <div className="flex items-center bg-white/10 border border-white/15 rounded-lg px-3 py-2">
-                    <i className="ri-search-line text-teal/60 mr-2 text-sm" />
-                    <span className="text-[13px] text-white/90 font-medium flex-1 truncate">
-                      {demo.scenario.query.slice(0, demo.typedLen)}
-                      {demo.phase === "typing" && (
-                        <span className="inline-block w-0.5 h-3.5 bg-teal ml-0.5 align-middle" style={{ animation: "pulse 0.8s ease infinite" }} />
-                      )}
-                      {demo.phase === "idle" && (
-                        <span className="text-white/30">검색어를 입력하세요...</span>
-                      )}
-                    </span>
-                    {demo.phase !== "idle" && demo.typedLen > 0 && (
-                      <span className="ml-2 px-2 py-0.5 bg-teal/80 text-white text-[10px] font-semibold rounded shrink-0">
-                        검색
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 콘텐츠 영역 */}
-                <div className="flex-1 min-h-0">
-                  {demo.phase === "searching" && (
-                    <div className="space-y-2">
-                      <div className="h-12 bg-white/5 rounded-lg animate-pulse" />
-                      <div className="space-y-1.5">
-                        <div className="h-9 bg-white/5 rounded-lg animate-pulse" />
-                        <div className="h-9 bg-white/5 rounded-lg animate-pulse" />
-                        <div className="h-9 bg-white/5 rounded-lg animate-pulse" />
-                        <div className="h-9 bg-white/5 rounded-lg animate-pulse" />
-                      </div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <div
-                          className="w-3 h-3 rounded-full border-2 border-teal/30 border-t-teal shrink-0"
-                          style={{ animation: "spin 0.8s linear infinite" }}
-                        />
-                        <span className="text-[10px] text-white/40">AI가 특허를 분석하고 있습니다...</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {demo.phase === "result" && (
-                    <div className="space-y-2">
-                      {demo.visibleResults >= 1 && (
-                        <div className="bg-teal/10 border border-teal/20 rounded-lg p-2.5 animate-fade-in">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <div className="w-4 h-4 bg-teal/80 rounded flex items-center justify-center">
-                              <i className="ri-robot-line text-white text-[9px]" />
-                            </div>
-                            <span className="text-[10px] font-semibold text-teal-200">AI 답변</span>
-                          </div>
-                          <p className="text-[10px] text-white/70 leading-relaxed line-clamp-2">
-                            {demo.scenario.answer}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
-                        {demo.scenario.results.map((r, i) =>
-                          demo.visibleResults >= i + 2 ? (
-                            <div
-                              key={i}
-                              className="flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 animate-fade-in"
-                            >
-                              <div className="min-w-0 flex-1 mr-2">
-                                <p className="text-[10px] font-medium text-white/80 truncate">{r.title}</p>
-                                <p className="text-[9px] text-white/40">{r.applicant}</p>
-                              </div>
-                              <span className="text-[9px] font-bold text-teal shrink-0 bg-teal/10 px-1.5 py-0.5 rounded">
-                                {r.score}%
-                              </span>
-                            </div>
-                          ) : null
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {demo.phase === "idle" && (
-                    <div className="h-full flex items-center justify-center">
-                      <div className="text-center">
-                        <i className="ri-robot-line text-2xl text-white/10 mb-2 block" />
-                        <span className="text-[10px] text-white/20">AI 검색 결과가 여기에 표시됩니다</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 시나리오 인디케이터 */}
-                <div className="flex justify-center gap-1.5 pt-2 shrink-0">
-                  {demoScenarios.map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                        i === demoScenarios.indexOf(demo.scenario) ? "bg-teal" : "bg-white/15"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+            <HomeSearchDemo />
           </div>
         </div>
       </section>
@@ -255,7 +136,7 @@ export default function HomePage() {
       <footer className="border-t border-gray-100 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <img src="/favicon.svg" alt="" className="w-5 h-5 rounded" />
+            <Image src="/favicon.svg" alt="" width={20} height={20} className="rounded" />
             <span className="text-xs font-semibold text-gray-500">
               <span className="text-teal-600">T</span>ech<span className="text-teal-600">D</span>ocs
             </span>

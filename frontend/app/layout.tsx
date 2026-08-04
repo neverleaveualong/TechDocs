@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
+import MobileNavigation from "@/components/layout/MobileNavigation";
 import Providers from "@/app/providers";
 
 export const metadata: Metadata = {
@@ -15,7 +16,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-gray-50">
         <Providers>
           <Sidebar />
-          <main className="min-h-screen" style={{ marginLeft: "240px" }}>
+          <MobileNavigation />
+          <main className="min-h-screen pb-20 lg:ml-60 lg:pb-0">
             {children}
           </main>
         </Providers>
