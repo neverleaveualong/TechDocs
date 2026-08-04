@@ -73,18 +73,18 @@ export default function SearchPage() {
   const quickQueries = mode === "rag" ? ragQueries : claimLensQueries;
   const report = claimLensEvents.findLast((event) => event.type === "final_report");
   const chartRows = claimLensEvents.filter((event) => event.type === "claim_chart_row");
-  const features = getToolResultArray(claimLensEvents, "extract_product_features", "features");
+  const features = getToolResultArray<string>(claimLensEvents, "extract_product_features", "features");
   const candidates = getToolResultArray<ClaimLensCandidate>(claimLensEvents, "search_claim_candidates", "candidates");
 
   return (
     <div className="min-h-screen bg-gray-50">
       <PageHeader
-        icon={mode === "rag" ? "ri-robot-line" : "ri-scales-3-line"}
-        title={mode === "rag" ? "특허 검색 (RAG)" : "특허 침해 분석 (AI AGENT)"}
+        icon={mode === "rag" ? "ri-search-eye-line" : "ri-scales-3-line"}
+        title={mode === "rag" ? "특허 검색 & AI 분석" : "특허 침해 위험 분석"}
         description={
           mode === "rag"
-            ? "자연어 질문으로 관련 특허를 찾고 핵심 내용을 요약합니다."
-            : "제품 기술 설명과 특허 청구범위를 대조하여 침해 위험을 분석합니다."
+            ? "자연어 질문으로 관련 특허를 찾고 핵심 권리 내용을 요약합니다."
+            : "제품 기술 설명과 특허 청구범위를 대조하여 침해 위험을 정밀 분석합니다."
         }
       />
 
@@ -93,15 +93,15 @@ export default function SearchPage() {
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ModeButton
               active={mode === "rag"}
-              icon="ri-search-line"
-              title="특허 검색 (RAG)"
-              subtitle="자연어 질문 기반 특허 검색 및 요약"
+              icon="ri-search-eye-line"
+              title="특허 검색 & AI 분석"
+              subtitle="자연어 질문 기반 특허 검색 및 핵심 요약"
               onClick={() => switchMode("rag")}
             />
             <ModeButton
               active={mode === "claimlens"}
               icon="ri-scales-3-line"
-              title="특허 침해 분석 (AI AGENT)"
+              title="특허 침해 위험 분석"
               subtitle="제품 기술과 특허 청구범위 대조 분석"
               onClick={() => switchMode("claimlens")}
             />
@@ -112,6 +112,7 @@ export default function SearchPage() {
             onCancel={() => (mode === "rag" ? ragStream.cancel() : claimLensStream.cancel())}
             isLoading={isLoading || isStreaming}
             buttonLabel={isLoading || isStreaming ? "중단" : "검색"}
+            initialQuery={activeQuery}
             placeholder={
               mode === "rag"
                 ? "찾고 싶은 기술을 문장으로 입력하세요. 예: 전기차 배터리 열 관리 기술"
@@ -154,9 +155,14 @@ export default function SearchPage() {
               {(streamedAnswer || streamedSources.length > 0) && (
                 <div className="space-y-4">
                   <div ref={resultRef}>
-                    <AiAnswer answer={streamedAnswer} query={activeQuery} queryLogId={queryLogId} isStreaming={isStreaming} />
+                    <AiAnswer
+                      answer={streamedAnswer}
+                      query={activeQuery}
+                      queryLogId={queryLogId}
+                      isStreaming={isStreaming}
+                      sources={streamedSources}
+                    />
                   </div>
-                  <SearchResults sources={streamedSources} />
                 </div>
               )}
               <AutoIngestDebugPanel events={ragEvents} />

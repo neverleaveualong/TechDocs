@@ -37,3 +37,7 @@ database.db
 
 # PR Bodies
 .pr-body*
+
+backend/venv/
+backend/dev.db
+

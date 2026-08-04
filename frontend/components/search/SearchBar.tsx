@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
@@ -20,6 +20,11 @@ export default function SearchBar({
   initialQuery = "",
 }: SearchBarProps) {
   const [query, setQuery] = useState(initialQuery);
+
+  // initialQuery (예시 클릭 등 외부 검색어 변경) 변경 시 검색창 텍스트 동기화
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +46,7 @@ export default function SearchBar({
           placeholder={placeholder}
           disabled={isLoading}
           aria-describedby="search-help"
-          className="w-full pl-12 pr-28 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none transition-all focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full pl-12 pr-28 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 outline-none transition-all focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-50 disabled:bg-gray-100 disabled:cursor-not-allowed font-medium"
         />
         <button
           type={isLoading && onCancel ? "button" : "submit"}
@@ -52,7 +57,7 @@ export default function SearchBar({
           }}
           disabled={!isLoading && !query.trim()}
           aria-label={isLoading && onCancel ? "검색 중단" : buttonLabel}
-          className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold rounded-lg transition-all whitespace-nowrap bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-sm hover:from-teal-600 hover:to-teal-700 disabled:from-gray-200 disabled:to-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+          className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-bold rounded-lg transition-all whitespace-nowrap bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-sm hover:from-teal-600 hover:to-teal-700 disabled:from-gray-200 disabled:to-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <>

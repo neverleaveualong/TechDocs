@@ -4,16 +4,33 @@ import ReactMarkdown from "react-markdown";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { submitFeedback } from "@/lib/api";
+import type { PatentSource } from "@/types/search";
+import PatentDetailModal from "@/components/patent/PatentDetailModal";
 
 interface AiAnswerProps {
   answer: string;
   query: string;
   queryLogId?: number;
   isStreaming?: boolean;
+  sources?: PatentSource[];
 }
 
-export default function AiAnswer({ answer, query, queryLogId, isStreaming = false }: AiAnswerProps) {
+function formatScore(score?: number | null) {
+  if (typeof score !== "number") return null;
+  const percentage = Math.min(Math.round((score / 0.03278) * 100), 100);
+  return `${percentage}%`;
+}
+
+export default function AiAnswer({
+  answer,
+  query,
+  queryLogId,
+  isStreaming = false,
+  sources = [],
+}: AiAnswerProps) {
   const [voted, setVoted] = useState<"up" | "down" | null>(null);
+  const [selectedPatent, setSelectedPatent] = useState<PatentSource | null>(null);
+
   const feedbackMutation = useMutation({
     mutationFn: ({ queryLogId, rating }: { queryLogId: number; rating: number }) =>
       submitFeedback(queryLogId, rating),
@@ -32,7 +49,7 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
   const bodyText = hasConclusion ? formattedAnswer.split("### 결론")[0] : formattedAnswer;
   const conclusionText = hasConclusion ? formattedAnswer.split("### 결론")[1] : "";
 
-  // 특허 리스트 파싱 및 개별 카드 데이터 추출
+  // 특허 리스트 파싱
   const patentRegex = /###\s*(?=\d+\.|\d+\s)/g;
   const sections = bodyText.split(patentRegex);
   
@@ -48,7 +65,15 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
     patentsData.push({ title, content });
   }
 
-  // 특허 상세 구조 파싱 정규식 함수
+  const getBulletSentences = (raw: string) => {
+    if (!raw) return [];
+    const cleanText = raw.replace(/###?\s*/g, "").replace(/\*\*/g, "").trim();
+    return cleanText
+      .split(/(?<=\.)\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 5);
+  };
+
   const parsePatentContent = (title: string, rawContent: string) => {
     const result = {
       title,
@@ -59,50 +84,35 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
       isParsed: false
     };
 
-    // 출원번호나 요약/유사점 키워드 중 하나라도 보이기 시작하면 카드로 즉시 파싱
     const hasAnyField = rawContent.includes("출원번호") || rawContent.includes("요약") || rawContent.includes("유사점");
-    if (!hasAnyField) {
-      return result;
-    }
+    if (!hasAnyField) return result;
 
     const appNumMatch = rawContent.match(/-\s*\*\*출원번호\*\*:\s*([^\n]+)/);
     const appDateMatch = rawContent.match(/-\s*\*\*출원일\*\*:\s*([^\n]+)/);
     const summaryMatch = rawContent.match(/-\s*\*\*기술 요약\*\*:\s*([\s\S]+?)(?=-\s*\*\*질의와의 유사점\*\*|$)/);
     const similarityMatch = rawContent.match(/-\s*\*\*질의와의 유사점\*\*:\s*([\s\S]+)$/);
 
-    result.appNum = appNumMatch ? appNumMatch[1].trim() : "분석 중...";
-    result.appDate = appDateMatch ? appDateMatch[1].trim() : "분석 중...";
+    result.appNum = appNumMatch ? appNumMatch[1].trim() : "-";
+    result.appDate = appDateMatch ? appDateMatch[1].trim() : "-";
 
-    // 기술요약 스트리밍 중 부분 매칭 개선
     if (summaryMatch) {
       result.summary = summaryMatch[1].trim();
     } else if (rawContent.includes("기술 요약")) {
       const parts = rawContent.split("**기술 요약**");
-      if (parts[1]) {
-        // 뒤에 유사점 타이틀이 생성되기 전까지의 본문을 긁어옴
-        result.summary = parts[1].split("**질의와의 유사점**")[0].replace(/^:\s*/, "").replace(/^-*\s*/, "").trim();
-      } else {
-        result.summary = "요약 작성 중...";
-      }
+      result.summary = parts[1] ? parts[1].split("**질의와의 유사점**")[0].replace(/^:\s*/, "").trim() : "분석 중...";
     } else {
       result.summary = "분석 중...";
     }
 
-    // 유사점 스트리밍 중 부분 매칭 개선
     if (similarityMatch) {
       result.similarity = similarityMatch[1].trim();
     } else if (rawContent.includes("유사점")) {
       const parts = rawContent.split("**질의와의 유사점**");
-      if (parts[1]) {
-        result.similarity = parts[1].replace(/^:\s*/, "").replace(/^-*\s*/, "").trim();
-      } else {
-        result.similarity = "대조 분석 중...";
-      }
+      result.similarity = parts[1] ? parts[1].replace(/^:\s*/, "").trim() : "분석 중...";
     } else {
-      result.similarity = "대조 분석 중...";
+      result.similarity = "분석 중...";
     }
 
-    // 마크다운 불릿 등 불필요한 기호 최종 정제
     result.summary = result.summary.replace(/^-\s*/, "").replace(/^\*?\s*/, "").trim();
     result.similarity = result.similarity.replace(/^-\s*/, "").replace(/^\*?\s*/, "").trim();
 
@@ -110,241 +120,182 @@ export default function AiAnswer({ answer, query, queryLogId, isStreaming = fals
     return result;
   };
 
+  const introBullets = getBulletSentences(introText);
+  const conclusionBullets = getBulletSentences(conclusionText);
+
   return (
-    <div className="animate-fade-in bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm transition hover:shadow-md">
-      <div className="px-5 sm:px-6 py-4.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/30">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center shadow-sm text-slate-650">
-            <i className="ri-article-line text-base" />
+    <>
+      <div className="animate-fade-in bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-xs transition hover:shadow-md">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/40">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-center text-teal-700 font-bold">
+              <i className="ri-article-line text-base" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 leading-tight">특허 분석 보고서</h3>
+              <p className="text-[11px] text-gray-400 font-medium mt-0.5">질의 기반 특허 요약 및 연관성 대조 리포트</p>
+            </div>
+            {isStreaming && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 bg-teal-50 text-teal-700 rounded-full font-bold border border-teal-100 animate-pulse ml-2">
+                <i className="ri-loader-4-line animate-spin text-[9px]" />
+                분석 리포트 작성 중
+              </span>
+            )}
           </div>
-          <div>
-            <span className="text-sm font-black text-gray-900 block leading-tight">AI 분석 결과</span>
-            <span className="text-[10px] text-gray-400 font-semibold mt-0.5 block sm:hidden">RAG · GPT-4o-mini</span>
-          </div>
-          {isStreaming && (
-            <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full font-bold border border-slate-200 animate-pulse ml-1.5">
-              <i className="ri-loader-4-line animate-spin text-[9px]" />
-              실시간 분석 중
+
+          {sources.length > 0 && (
+            <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700 border border-teal-100">
+              인용 출처 {sources.length}건
             </span>
           )}
         </div>
-        <div className="hidden sm:flex items-center gap-2">
-          <span className="text-[10px] px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg font-black border border-slate-200">RAG</span>
-          <span className="text-[10px] px-2.5 py-1 bg-gray-50 text-gray-500 rounded-lg font-bold border border-gray-100 font-mono">GPT-4o-mini</span>
-        </div>
-      </div>
 
-      <div className="px-5 sm:px-6 py-6 bg-slate-50/30">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100/80 border border-slate-200/60 rounded-lg text-xs font-extrabold text-slate-700 mb-4 select-none">
-          <i className="ri-search-2-line text-slate-500" />
-          <span>질의어: {query}</span>
-        </div>
-
-        {/* 도입부 검색 브리핑 요약 */}
-        {introText && (
-          <div className="prose prose-slate max-w-none text-slate-800 whitespace-pre-wrap leading-relaxed mb-4">
-            <ReactMarkdown
-              components={{
-                p({ node, children, ...props }) {
-                  void node;
-                  const textContent = String(children);
-                  const isIntro = textContent.includes("사용자 질의") || textContent.includes("KIPRIS");
-                  
-                  if (isIntro) {
-                    return (
-                      <div className="bg-slate-50/90 border-l-4 border-slate-400 rounded-r-xl p-4 sm:p-4.5 text-slate-800 text-[14px] sm:text-[14.5px] shadow-sm mb-4">
-                        <p className="font-extrabold text-slate-500 text-[10.5px] mb-1.5 uppercase tracking-wider select-none">검색 브리핑 요약</p>
-                        <p className="leading-relaxed font-semibold text-slate-800">{children}</p>
-                      </div>
-                    );
-                  }
-                  return (
-                    <p className="my-0.5 text-slate-750 leading-relaxed text-[13.5px] sm:text-[14.5px] font-medium" {...props}>
-                      {children}
-                    </p>
-                  );
-                }
-              }}
-            >
-              {introText}
-            </ReactMarkdown>
+        <div className="px-6 py-6 space-y-6">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/80 border border-gray-200/70 rounded-lg text-xs font-bold text-gray-700">
+            <i className="ri-search-line text-gray-500" />
+            <span>질의 키워드: {query}</span>
           </div>
-        )}
 
-        {/* 개별 특허 카드형 리스트 */}
-        {patentsData.length > 0 && (
-          <div className="space-y-4.5 mb-5">
-            {patentsData.map((patent, idx) => {
-              const parsedInfo = parsePatentContent(patent.title, patent.content);
-              
-              if (parsedInfo.isParsed) {
+          {/* 📌 주요 분석 요약 (불릿포인트) */}
+          {introBullets.length > 0 && (
+            <div className="rounded-xl border border-teal-100 bg-teal-50/30 p-5 space-y-3">
+              <h4 className="text-xs font-bold text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
+                ■ 주요 분석 요약
+              </h4>
+              <div className="space-y-2 text-xs text-gray-800 font-medium">
+                {introBullets.map((bullet, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="font-bold text-teal-600 shrink-0 select-none">•</span>
+                    <span className="leading-relaxed">{bullet}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 📌 연관 특허 리스트 (출처 정보 & 상세보기 버튼 통합!) */}
+          {patentsData.length > 0 && (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">■ 주요 연관 특허 리스트 ({patentsData.length}건)</h4>
+              {patentsData.map((patent, idx) => {
+                const parsedInfo = parsePatentContent(patent.title, patent.content);
+                const matchedSource = sources.find(
+                  (s) => s.application_number && parsedInfo.appNum && s.application_number.includes(parsedInfo.appNum.replace(/-/g, ""))
+                ) || sources[idx];
+
+                const scoreDisplay = formatScore(matchedSource?.score);
+
                 return (
-                  <div key={idx} className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-sm hover:shadow-md transition-all hover:border-slate-350">
-                    {/* 타이틀 헤더 */}
-                    <div className="flex items-center gap-2.5 mb-2.5">
-                      <span className="flex items-center justify-center w-6.5 h-6.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 font-extrabold text-[12px] sm:text-[13px] shadow-sm select-none shrink-0">
-                        {idx + 1}
-                      </span>
-                      <h3 className="text-[15px] sm:text-[16px] font-black text-slate-900 leading-snug">
-                        {patent.title.replace(/^\d+\.\s*/, "")}
-                      </h3>
+                  <div key={idx} className="bg-white border border-gray-200/80 rounded-xl p-5 shadow-2xs transition-all space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <span className="flex items-center justify-center w-5.5 h-5.5 rounded bg-gray-100 text-gray-700 font-bold text-xs shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <h4 className="text-sm sm:text-base font-bold text-gray-900 leading-snug">
+                          {patent.title.replace(/^\d+\.\s*/, "")}
+                        </h4>
+                      </div>
+
+                      {scoreDisplay && (
+                        <span className="shrink-0 rounded-lg bg-teal-50 border border-teal-100 px-2.5 py-1 text-xs font-extrabold text-teal-800">
+                          연관도 {scoreDisplay}
+                        </span>
+                      )}
                     </div>
 
-                    {/* 수직 정렬된 콘텐츠 영역 (좌측 밀착) */}
-                    <div className="space-y-3">
-                      {/* 메타데이터 라인 */}
-                      <div className="text-[12.5px] font-bold text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 select-none">
-                        <span>출원번호: {parsedInfo.appNum}</span>
-                        <span className="text-slate-300">•</span>
-                        <span>출원일: {parsedInfo.appDate}</span>
+                    <div className="space-y-2 text-xs pl-8">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-gray-500 font-semibold border-b border-gray-100 pb-2">
+                        <span>• 출원번호: <strong className="text-gray-800 font-mono">{parsedInfo.appNum !== "-" ? parsedInfo.appNum : matchedSource?.application_number || "-"}</strong></span>
+                        <span>• 출원일자: <strong className="text-gray-800">{parsedInfo.appDate !== "-" ? parsedInfo.appDate : matchedSource?.application_date || "-"}</strong></span>
+                        <span>• 출원인: <strong className="text-gray-800">{matchedSource?.applicant_name || "-"}</strong></span>
                       </div>
 
-                      {/* 기술 요약 */}
-                      <div className="text-[13.5px] sm:text-[14.5px] text-slate-700 leading-relaxed font-medium">
-                        <span className="font-extrabold text-slate-900 block mr-1.5">
-                          <i className="ri-file-text-line mr-1.5 text-slate-500 align-middle" />
-                          기술 요약
-                        </span>
-                        <p className="text-slate-650 mt-0.5">{parsedInfo.summary}</p>
+                      <div className="space-y-1 text-gray-700">
+                        <p className="font-bold text-gray-900">• 기술 요약:</p>
+                        <p className="pl-3 leading-relaxed text-gray-600 font-medium">{parsedInfo.summary}</p>
                       </div>
 
-                      {/* 질의와의 유사점 */}
-                      <div className="text-[13.5px] sm:text-[14.5px] text-slate-800 leading-relaxed font-bold border-t border-slate-100/70 pt-2.5">
-                        <span className="text-slate-900 block mr-1.5">
-                          <i className="ri-focus-3-line mr-1.5 text-slate-500 align-middle" />
-                          질의와의 유사점
-                        </span>
-                        <p className="text-slate-700 mt-0.5 font-semibold">{parsedInfo.similarity}</p>
+                      <div className="space-y-1 text-gray-700 pt-1">
+                        <p className="font-bold text-teal-800">• 질의와의 연관성 & 권리 특징:</p>
+                        <p className="pl-3 leading-relaxed text-teal-900 font-semibold">{parsedInfo.similarity}</p>
                       </div>
+
+                      {/* 🎯 특허 원문 세부보기 버튼 카드 통합 */}
+                      {matchedSource && (
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPatent(matchedSource)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-teal-700"
+                          >
+                            <i className="ri-file-text-line" />
+                            <span>특허 명세서 원문 상세보기</span>
+                            <i className="ri-arrow-right-s-line text-xs" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
-              }
-
-              // 파싱 실패 또는 스트리밍 중인 불완전 상태 폴백
-              return (
-                <div key={idx} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-all hover:border-slate-300">
-                  <div className="flex items-center gap-2 mb-3.5 pb-2.5 border-b border-slate-100">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 text-slate-850 font-extrabold text-[11.5px] sm:text-[12.5px] shadow-sm select-none">
-                      {idx + 1}
-                    </span>
-                    <h3 className="text-[14px] sm:text-[15px] font-black text-slate-900 leading-snug">
-                      {patent.title.replace(/^\d+\.\s*/, "")}
-                    </h3>
-                  </div>
-                  
-                  <div className="prose prose-slate max-w-none text-slate-800 whitespace-pre-wrap leading-relaxed">
-                    <ReactMarkdown
-                      components={{
-                        ul({ node, children, ...props }) {
-                          void node;
-                          return (
-                            <ul className="list-none pl-1.5 my-0 space-y-0.5 text-slate-700 font-medium" {...props}>
-                              {children}
-                            </ul>
-                          );
-                        },
-                        li({ node, children, ...props }) {
-                          void node;
-                          return (
-                            <li className="relative pl-4 text-slate-700 leading-normal text-[13.5px] sm:text-[14.5px] my-0 py-0.5" {...props}>
-                              <span className="absolute left-0 top-[6.5px] w-1.5 h-1.5 rounded-full bg-slate-400 select-none" />
-                              {children}
-                            </li>
-                          );
-                        },
-                        p({ node, children, ...props }) {
-                          void node;
-                          return (
-                            <p className="my-0.5 text-slate-700 leading-normal text-[13.5px] sm:text-[14.5px] font-medium" {...props}>
-                              {children}
-                            </p>
-                          );
-                        },
-                        strong({ node, children, ...props }) {
-                          void node;
-                          return (
-                            <strong className="font-extrabold text-slate-900 mr-1" {...props}>
-                              {children}
-                            </strong>
-                          );
-                        }
-                      }}
-                    >
-                      {patent.content}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 스트리밍 중 대기 텍스트 */}
-        {patentsData.length === 0 && !introText && !isStreaming && (
-          <div className="text-slate-400 text-sm font-medium py-4 text-center">
-            답변을 생성하고 있습니다...
-          </div>
-        )}
-
-        {conclusionText && (
-          <div className="mt-6 p-6.5 bg-slate-50 border border-slate-200 rounded-2xl shadow-sm">
-            <h4 className="text-[15px] sm:text-[16px] font-black text-slate-900 mb-3 flex items-center gap-1.5 select-none">
-              ■ 종합 결론 및 활용 조언
-            </h4>
-            <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed">
-              <ReactMarkdown
-                components={{
-                  p({ node, children, ...props }) {
-                    void node;
-                    return (
-                      <p className="text-slate-850 leading-relaxed text-[14px] sm:text-[15px] font-bold" {...props}>
-                        {children}
-                      </p>
-                    );
-                  }
-                }}
-              >
-                {conclusionText}
-              </ReactMarkdown>
+              })}
             </div>
+          )}
+
+          {/* 📌 종합 결론 */}
+          {conclusionBullets.length > 0 && (
+            <div className="rounded-xl border border-teal-200/80 bg-teal-50/40 p-5 space-y-3">
+              <h4 className="text-sm font-bold text-teal-900 flex items-center gap-1.5">
+                ■ 검토 결론 및 시사점
+              </h4>
+              <div className="space-y-2 text-xs text-teal-950 font-semibold">
+                {conclusionBullets.map((bullet, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="font-bold text-teal-600 shrink-0 select-none">•</span>
+                    <span className="leading-relaxed">{bullet}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 피드백 */}
+        {queryLogId && (
+          <div className="px-6 py-3 border-t border-gray-100 flex items-center gap-3 bg-gray-50/40">
+            <span className="text-[11px] text-gray-400">분석 보고서 결과가 유용한가요?</span>
+            <button
+              onClick={() => handleFeedback(1)}
+              disabled={feedbackMutation.isPending || voted !== null}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                voted === "up"
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                  : "bg-white text-gray-600 border border-gray-200 hover:bg-emerald-50 hover:text-emerald-700"
+              } disabled:opacity-50`}
+            >
+              <i className={voted === "up" ? "ri-thumb-up-fill" : "ri-thumb-up-line"} />
+              유용함
+            </button>
+            <button
+              onClick={() => handleFeedback(-1)}
+              disabled={feedbackMutation.isPending || voted !== null}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                voted === "down"
+                  ? "bg-red-100 text-red-800 border border-red-200"
+                  : "bg-white text-gray-600 border border-gray-200 hover:bg-red-50 hover:text-red-700"
+              } disabled:opacity-50`}
+            >
+              <i className={voted === "down" ? "ri-thumb-down-fill" : "ri-thumb-down-line"} />
+              개선 필요
+            </button>
           </div>
         )}
       </div>
 
-      {/* Feedback buttons */}
-      {queryLogId && (
-        <div className="px-5 sm:px-6 py-3 border-t border-gray-100 flex items-center gap-3 bg-gray-50/50">
-          <span className="text-[11px] text-gray-400">답변 결과가 도움이 되었나요?</span>
-          <button
-            onClick={() => handleFeedback(1)}
-            disabled={feedbackMutation.isPending || voted !== null}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-              voted === "up"
-                ? "bg-green-100 text-green-700 border border-green-200"
-                : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-green-50 hover:text-green-600"
-            } disabled:opacity-50`}
-          >
-            <i className={voted === "up" ? "ri-thumb-up-fill" : "ri-thumb-up-line"} />
-            도움됨
-          </button>
-          <button
-            onClick={() => handleFeedback(-1)}
-            disabled={feedbackMutation.isPending || voted !== null}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-              voted === "down"
-                ? "bg-red-100 text-red-700 border border-red-200"
-                : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-red-50 hover:text-red-600"
-            } disabled:opacity-50`}
-          >
-            <i className={voted === "down" ? "ri-thumb-down-fill" : "ri-thumb-down-line"} />
-            도움 안 됨
-          </button>
-          {voted && (
-            <span className="text-[10px] text-gray-400 ml-auto">의견을 주셔서 감사합니다!</span>
-          )}
-        </div>
+      {/* 특허 상세 모달 */}
+      {selectedPatent && (
+        <PatentDetailModal patent={selectedPatent} onClose={() => setSelectedPatent(null)} />
       )}
-    </div>
+    </>
   );
 }
