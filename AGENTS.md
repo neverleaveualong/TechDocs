@@ -8,6 +8,12 @@
 2. 브랜치, 커밋 및 PR 규칙: `Docs/harness/GIT_RULES.md`
 3. PR 본문 형식: `.github/pull_request_template.md`
 
+## 작업 영역별 확인 문서
+
+- Backend 수정: `Docs/harness/BACKEND_RULES.md`, `Docs/API.md`, `Docs/DATABASE.md`
+- Frontend 수정: `Docs/harness/FRONTEND_RULES.md`, `Docs/API.md`
+- 기능 또는 구조 변경: `Docs/PRODUCT_BRIEF.md`, `Docs/PAIN_POINTS.md`
+
 ## 작업 원칙
 
 - 요청과 관계없는 파일을 수정하지 않는다.
@@ -55,7 +61,7 @@
 ```bash
 # Backend
 cd backend && python -m compileall -q app
-cd backend && python -m pytest
+cd backend && python -m unittest discover -s tests -v
 
 # Frontend
 cd frontend && npm run lint

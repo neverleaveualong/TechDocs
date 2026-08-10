@@ -73,8 +73,11 @@
 | --- | --- | --- |
 | `/` | [`README.md`](README.md), [`AGENTS.md`](AGENTS.md) | 프로젝트 소개와 저장소 전체 AI 작업 규칙 |
 | `.github/` | [`pull_request_template.md`](.github/pull_request_template.md) | `요약 → 문제점 → 원인 → 한 것 → 결과` PR 템플릿 |
+| `Docs/` | [`README.md`](Docs/README.md), [`PRODUCT_BRIEF.md`](Docs/PRODUCT_BRIEF.md), [`API.md`](Docs/API.md), [`DATABASE.md`](Docs/DATABASE.md), [`PAIN_POINTS.md`](Docs/PAIN_POINTS.md) | 문서 안내, 제품 의도, API·DB 설계 및 우선순위별 리팩토링 백로그 |
 | `Docs/harness/` | [`CODING_RULES.md`](Docs/harness/CODING_RULES.md) | 변수 이름, 파일 상단 헤더 및 한글 주석 규칙 |
 | `Docs/harness/` | [`GIT_RULES.md`](Docs/harness/GIT_RULES.md) | 브랜치, 커밋, PR, 병합 및 동기화 규칙 |
+| `Docs/harness/` | [`FRONTEND_RULES.md`](Docs/harness/FRONTEND_RULES.md) | Next.js 구조, 상태, API 타입, 접근성 및 검증 규칙 |
+| `Docs/harness/` | [`BACKEND_RULES.md`](Docs/harness/BACKEND_RULES.md) | FastAPI 계층, 스트림, DB, Agent 및 검증 규칙 |
 
 새 Markdown 문서를 추가하거나 이동 또는 삭제할 때는 이 표와 루트 `AGENTS.md`의 문서 지도를 함께 갱신합니다.
 
