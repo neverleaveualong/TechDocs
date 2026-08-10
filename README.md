@@ -6,8 +6,6 @@
 - 데모: https://techdocs-app.vercel.app
 - 라이선스: 본 프로젝트의 저작권자는 심우현이며, 사용 권한은 심우현에게만 있습니다.
 
-![TechDocs 특허 검색 과정](docs/assets/techdocs-search-demo.gif)
-
 ## 목차
 
 - [1. 현황](#1-현황)
@@ -63,13 +61,11 @@
   - 사용자가 자연어로 질문하고 검색 결과와 분석 결과를 화면에서 확인합니다.
   - 검색, 특허 수집, 대시보드 통계를 하나의 서비스 흐름으로 연결합니다.
   - 검색 진행 상황과 ClaimLens 분석 과정을 실시간으로 보여줍니다.
-  - 상세 내용은 [프론트엔드 기술 문서](docs/FRONTEND.md)에서 확인할 수 있습니다.
 - 백엔드 AI Agent
   - 검색 결과가 부족하면 필요한 특허 정보를 자동으로 수집하고 다시 검색합니다.
   - 검색 결과를 바탕으로 근거가 포함된 답변을 생성합니다.
   - 제품 설명과 특허 청구항을 구성요소 단위로 비교합니다.
   - 검색과 분석의 진행 상태를 실시간으로 전달합니다.
-  - 상세 내용은 [백엔드 AI Agent 기술 문서](docs/BACKEND.md)에서 확인할 수 있습니다.
 
 ## 7. Markdown 문서 지도
 
@@ -77,11 +73,8 @@
 | --- | --- | --- |
 | `/` | [`README.md`](README.md), [`AGENTS.md`](AGENTS.md) | 프로젝트 소개와 저장소 전체 AI 작업 규칙 |
 | `.github/` | [`pull_request_template.md`](.github/pull_request_template.md) | `요약 → 문제점 → 원인 → 한 것 → 결과` PR 템플릿 |
-| `.agents/skills/` | 각 작업 폴더의 `SKILL.md` | Codex가 작업 유형별로 사용하는 절차 |
-| `.gemini/skills/` | 각 작업 폴더의 `SKILL.md` | Gemini가 작업 유형별로 사용하는 절차 |
-| `docs/` | [`README.md`](docs/README.md), [`API.md`](docs/API.md), [`ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`BACKEND.md`](docs/BACKEND.md), [`DATABASE.md`](docs/DATABASE.md), [`FRONTEND.md`](docs/FRONTEND.md), [`RUNTIME_ENVIRONMENT.md`](docs/RUNTIME_ENVIRONMENT.md) | 현재 시스템의 상세 기술 문서 |
-| `docs/development/` | [`coding-conventions.md`](docs/development/coding-conventions.md), [`pull-request-guide.md`](docs/development/pull-request-guide.md) | 코딩·주석·PR 작성 규칙 |
-| `frontend/` | [`AGENTS.md`](frontend/AGENTS.md) | Next.js 전용 AI 작업 규칙 |
+| `Docs/harness/` | [`CODING_RULES.md`](Docs/harness/CODING_RULES.md) | 변수 이름, 파일 상단 헤더 및 한글 주석 규칙 |
+| `Docs/harness/` | [`GIT_RULES.md`](Docs/harness/GIT_RULES.md) | 브랜치, 커밋, PR, 병합 및 동기화 규칙 |
 
 새 Markdown 문서를 추가하거나 이동 또는 삭제할 때는 이 표와 루트 `AGENTS.md`의 문서 지도를 함께 갱신합니다.
 
