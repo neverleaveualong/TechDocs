@@ -17,6 +17,10 @@
   - 기술 스택, 화면 책임, React Query, 스트림 Hook, 프론트엔드 상태관리를 정리합니다.
 - [백엔드(AI Agent) 기술 문서](BACKEND.md)
   - 자연어 검색, 자동 수집, ClaimLens, 계층별 책임을 정리합니다.
+- [코딩 및 주석 규칙](development/coding-conventions.md)
+  - 이름, 파일 상단 헤더, 작성자, 최종 수정일과 한글 주석 기준을 정리합니다.
+- [PR 작성 규칙](development/pull-request-guide.md)
+  - `요약 → 문제점 → 원인 → 한 것 → 결과` 순서의 PR 작성 기준을 정리합니다.
 
 ## 작성 원칙
 
