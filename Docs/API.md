@@ -224,6 +224,52 @@ Pinecone 통계 조회가 실패하면 관계형 통계 요청은 유지하고 �
 
 단계 이름은 `input_analysis`, `patent_search`, `claim_loading`, `feature_matching`, `report_generation`입니다. 스트림 오류 역시 HTTP 200 내부 이벤트일 수 있습니다.
 
+`tool_result`는 `tool_name`이나 `result`가 아니라 `tool`과 `data`를 사용합니다. 제품 기능과 후보 특허 이벤트의 형태는 다음과 같습니다.
+
+```json
+{
+  "type": "tool_result",
+  "step": "input_analysis",
+  "tool": "extract_product_features",
+  "message": null,
+  "data": {
+    "features": ["센서 데이터 수집", "AI 이상 탐지"]
+  }
+}
+```
+
+```json
+{
+  "type": "tool_result",
+  "step": "patent_search",
+  "tool": "search_claim_candidates",
+  "message": null,
+  "data": {
+    "candidates": [
+      {
+        "vectorId": "patent:1:claim:1",
+        "score": 0.82,
+        "claimComparisonReady": true,
+        "matchedTextType": "independent_claim",
+        "matchedText": "센서 데이터를 분석하는 단계",
+        "patent": {
+          "id": 1,
+          "applicationNumber": "1020240000001",
+          "title": "센서 데이터 분석 장치",
+          "applicantName": "출원인",
+          "registerStatus": "등록",
+          "abstract": "센서 데이터를 이용한 분석 장치"
+        },
+        "claim": null,
+        "claimElementCount": 2
+      }
+    ]
+  }
+}
+```
+
+`claim_chart_row.data`는 `claimElement`, `productFeature`, `match` 등 camelCase 필드를 사용합니다. `match` 값은 `matched`, `partial`, `not_found`, `uncertain` 중 하나이며 기술적 구성요소 비교 상태를 의미합니다. 법률적 침해 여부를 확정하는 값으로 사용하지 않습니다.
+
 ## 계약 변경 규칙
 
 - 경로, HTTP 상태, 요청·응답 필드명, 기본값을 바꾸면 Backend 모델과 Frontend `types`, `lib/api.ts`, 테스트 및 이 문서를 함께 수정합니다.

@@ -66,6 +66,7 @@ cd backend && python -m unittest discover -s tests -v
 # Frontend
 cd frontend && npm run lint
 cd frontend && npx tsc --noEmit
+cd frontend && npm run test
 cd frontend && npm run build
 ```
 

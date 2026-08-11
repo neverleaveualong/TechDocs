@@ -1,3 +1,15 @@
+// ============================================================
+// 파일 역할: Backend API 요청과 NDJSON·SSE 스트리밍 응답 처리를 담당한다.
+//
+// 작성자: 심우현
+// 최종 수정일: 2026년 8월 11일
+//
+// 주요 책임:
+// - 검색과 ClaimLens 요청 생성
+// - 스트리밍 frame 파싱 및 계약 검증
+// - API 오류를 화면용 오류로 변환
+// ============================================================
+
 import type {
   FeedbackStats,
   SearchResponse,
@@ -6,6 +18,7 @@ import type {
 } from "@/types/search";
 import type { ClaimLensEvent } from "@/types/claimlens";
 import type { Stats } from "@/types/stats";
+import { isClaimLensEvent } from "@/lib/claimlens-events";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://techdocs-1v4q.onrender.com";
 
@@ -197,9 +210,14 @@ function parseClaimLensSse(chunk: string): ClaimLensEvent | null {
   const dataLine = chunk.split("\n").find((line) => line.startsWith("data:"));
   if (!dataLine) return null;
   try {
-    return JSON.parse(dataLine.slice("data:".length).trim()) as ClaimLensEvent;
-  } catch {
-    return null;
+    const parsed: unknown = JSON.parse(dataLine.slice("data:".length).trim());
+    if (!isClaimLensEvent(parsed)) {
+      throw new ApiError("ClaimLens 응답 계약이 올바르지 않습니다.", 200);
+    }
+    return parsed;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError("ClaimLens 스트림 JSON을 해석할 수 없습니다.", 200);
   }
 }
 

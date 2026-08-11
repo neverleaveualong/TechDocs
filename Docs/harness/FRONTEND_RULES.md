@@ -73,7 +73,8 @@
 cd frontend
 npm run lint
 npx tsc --noEmit
+npm run test
 npm run build
 ```
 
-변경한 사용자 흐름은 loading, 성공, 빈 결과, 오류, 취소 및 연속 요청을 확인합니다. 현재 별도 unit-test script가 없으므로 존재하지 않는 테스트를 실행한 것처럼 보고하지 않습니다.
+변경한 사용자 흐름은 loading, 성공, 빈 결과, 오류, 취소 및 연속 요청을 확인합니다. API 이벤트를 변경하면 실제 Backend payload 형태의 fixture로 런타임 검증과 selector를 테스트합니다. 비동기 Server Component는 Vitest 대신 E2E 테스트로 검증합니다.

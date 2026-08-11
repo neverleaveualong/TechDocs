@@ -1,18 +1,34 @@
+// ============================================================
+// 파일 역할: 특허 검색과 ClaimLens 분석 화면의 모드·스트림 결과를 조합한다.
+//
+// 작성자: 심우현
+// 최종 수정일: 2026년 8월 11일
+//
+// 주요 책임:
+// - 검색 모드와 입력 상태 관리
+// - 검색·ClaimLens 스트림 실행
+// - 이벤트에서 추출한 결과를 화면 컴포넌트에 전달
+// ============================================================
+
 "use client";
 
 import { useState } from "react";
 import SearchBar from "@/components/search/SearchBar";
 import AiAnswer from "@/components/search/AiAnswer";
-import SearchResults from "@/components/search/SearchResults";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import PageHeader from "@/components/common/PageHeader";
 import StatusAlert from "@/components/common/StatusAlert";
 import AgentTimeline from "@/components/search/AgentTimeline";
-import ClaimLensResult, { AutoIngestDebugPanel, getToolResultArray } from "@/components/search/ClaimLensResult";
-import type { ClaimLensCandidate } from "@/types/claimlens";
+import ClaimLensResult, { AutoIngestDebugPanel } from "@/components/search/ClaimLensResult";
 import { useClaimLensStream } from "@/hooks/useClaimLensStream";
 import { useSearchAutoScroll } from "@/hooks/useSearchAutoScroll";
 import { useSearchStream } from "@/hooks/useSearchStream";
+import {
+  selectCandidates,
+  selectChartRows,
+  selectFinalReport,
+  selectProductFeatures,
+} from "@/lib/claimlens-events";
 
 type SearchMode = "rag" | "claimlens";
 
@@ -71,10 +87,10 @@ export default function SearchPage() {
   };
 
   const quickQueries = mode === "rag" ? ragQueries : claimLensQueries;
-  const report = claimLensEvents.findLast((event) => event.type === "final_report");
-  const chartRows = claimLensEvents.filter((event) => event.type === "claim_chart_row");
-  const features = getToolResultArray<string>(claimLensEvents, "extract_product_features", "features");
-  const candidates = getToolResultArray<ClaimLensCandidate>(claimLensEvents, "search_claim_candidates", "candidates");
+  const reportMarkdown = selectFinalReport(claimLensEvents);
+  const chartRows = selectChartRows(claimLensEvents);
+  const features = selectProductFeatures(claimLensEvents);
+  const candidates = selectCandidates(claimLensEvents);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -186,7 +202,7 @@ export default function SearchPage() {
                 features={features}
                 candidates={candidates}
                 chartRows={chartRows}
-                reportMarkdown={String(report?.data?.markdown ?? "")}
+                reportMarkdown={reportMarkdown}
                 onStop={claimLensStream.cancel}
                 onReset={() => {
                   claimLensStream.reset();
