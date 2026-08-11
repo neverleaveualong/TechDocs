@@ -1,6 +1,19 @@
+// ============================================================
+// 파일 역할: 검색과 ClaimLens Agent의 주요 진행 이벤트를 타임라인으로 표시한다.
+//
+// 작성자: 심우현
+// 최종 수정일: 2026년 8월 11일
+//
+// 주요 책임:
+// - 진행 이벤트 중복 제거와 최근 단계 요약
+// - Agent별 작업 상태 표시
+// - 기술 세부정보 펼침·접힘 제공
+// ============================================================
+
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import type { SearchStreamEvent } from "@/types/search";
 
 const ipcCategoryMap: Record<string, string> = {
@@ -12,11 +25,37 @@ const ipcCategoryMap: Record<string, string> = {
   B60L: "B60L (전기차 구동 제어)",
 };
 
+function getEventAgent(event: SearchStreamEvent): string | null {
+  if (event.type === "agent_decision" || event.type === "agent_action" || event.type === "agent_completed") {
+    return event.agent;
+  }
+  return null;
+}
+
+function getStringArray(data: Record<string, unknown>, primaryKey: string, legacyKey: string): string[] {
+  const value = data[primaryKey] ?? data[legacyKey];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function getEventDetails(event: SearchStreamEvent): Record<string, unknown> {
+  switch (event.type) {
+    case "query_plan":
+    case "auto_ingest_completed":
+    case "search_quality":
+      return event.data;
+    case "agent_decision":
+      return event.decision;
+    case "agent_completed":
+      return event.payload ?? {};
+    default:
+      return {};
+  }
+}
+
 export default function AgentTimeline({ events }: { events: SearchStreamEvent[] }) {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
 
-  // 1. 타임라인 표시 가능 이벤트 1차 필터링
   const rawTimelineEvents = events.filter((e) =>
     [
       "query_plan",
@@ -30,15 +69,14 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
     ].includes(e.type)
   );
 
-  // 2. ⚡ [중복/우회 이벤트 강력 디두플리케이션]
+  // 같은 Agent의 연속 상태 이벤트는 사용자에게 중복 단계처럼 보이므로 하나만 표시한다.
   const timelineEvents = rawTimelineEvents.filter((event, index, arr) => {
     if (index === 0) return true;
-    const prev = arr[index - 1] as Record<string, any>;
-    const curr = event as Record<string, any>;
+    const previousEvent = arr[index - 1];
 
-    if (curr.type === prev.type && curr.agent === prev.agent) return false;
-    if (curr.type === "agent_action" && prev.type === "agent_action") return false;
-    if (curr.type === "agent_completed" && prev.type === "agent_completed") return false;
+    if (event.type === previousEvent.type && getEventAgent(event) === getEventAgent(previousEvent)) return false;
+    if (event.type === "agent_action" && previousEvent.type === "agent_action") return false;
+    if (event.type === "agent_completed" && previousEvent.type === "agent_completed") return false;
 
     return true;
   });
@@ -57,7 +95,6 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
 
   return (
     <div className="rounded-xl border border-gray-200/80 bg-white p-4.5 shadow-xs transition-all duration-300 space-y-3">
-      {/* 📌 헤더 */}
       <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
         <div className="flex items-center gap-2">
           <div className="flex h-6.5 w-6.5 items-center justify-center rounded-lg bg-teal-50 text-teal-700 border border-teal-100">
@@ -84,7 +121,6 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
         </div>
       </div>
 
-      {/* 🕒 이전 단계 접기/펼치기 */}
       {hasTooManySteps && !showAllSteps && (
         <button
           onClick={() => setShowAllSteps(true)}
@@ -94,35 +130,32 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
         </button>
       )}
 
-      {/* 🕒 연속적인 1, 2, 3 정갈한 순번 카드 표시 */}
       <div className="space-y-2.5">
         {visibleEvents.map((event, idx) => {
-          // 건너뛰지 않는 연속 정순 인덱스
           const displayStepNumber = (showAllSteps || !hasTooManySteps)
             ? idx + 1
             : (timelineEvents.length - 3) + idx + 1;
 
           const isLast = idx === visibleEvents.length - 1;
           const isActive = isLast && !isAllDone && !hasError;
-          const anyEvent = event as Record<string, any>;
 
           if (event.type === "query_plan") {
-            const data = anyEvent.data || {};
-            const searchKeywords = (data.searchKeywords || data.search_keywords || []) as string[];
-            const ipcCandidates = (data.ipcCandidates || data.ipc_candidates || []) as string[];
+            const data = event.data;
+            const searchKeywords = getStringArray(data, "searchKeywords", "search_keywords");
+            const ipcCandidates = getStringArray(data, "ipcCandidates", "ipc_candidates");
 
             return (
-              <TimelineCard key={idx} stepNumber={displayStepNumber} title="질문 파싱 & 키워드 수립" isActive={isActive}>
+              <TimelineCard key={`${event.type}-${displayStepNumber}`} stepNumber={displayStepNumber} title="질문 파싱 & 키워드 수립" isActive={isActive}>
                 <div className="space-y-1 text-xs text-gray-700">
-                  {data.summary && (
-                    <p className="font-semibold text-gray-900">• 분석 요약: <span className="font-medium text-gray-700">{String(data.summary)}</span></p>
+                  {typeof data.summary === "string" && data.summary && (
+                    <p className="font-semibold text-gray-900">• 분석 요약: <span className="font-medium text-gray-700">{data.summary}</span></p>
                   )}
                   {searchKeywords.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       <span className="font-bold text-gray-500">• 추출 키워드:</span>
-                      {searchKeywords.map((kw, i) => (
-                        <span key={i} className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-teal-700 border border-teal-100">
-                          #{kw}
+                      {searchKeywords.map((keyword) => (
+                        <span key={keyword} className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-teal-700 border border-teal-100">
+                          #{keyword}
                         </span>
                       ))}
                     </div>
@@ -130,8 +163,8 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
                   {ipcCandidates.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1 pt-0.5">
                       <span className="font-bold text-gray-500">• 특허 분류:</span>
-                      {ipcCandidates.map((ipc, i) => (
-                        <span key={i} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 border border-gray-200">
+                      {ipcCandidates.map((ipc) => (
+                        <span key={ipc} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 border border-gray-200">
                           {ipcCategoryMap[ipc] || ipc}
                         </span>
                       ))}
@@ -143,13 +176,12 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           }
 
           if (event.type === "agent_decision") {
-            const decision = anyEvent.decision || {};
-            const nextAction = decision.next_action || "";
+            const nextAction = event.decision.next_action;
             const isIngest = String(nextAction).toLowerCase() === "ingest";
             const isSearch = String(nextAction).toLowerCase() === "search";
 
             return (
-              <TimelineCard key={idx} stepNumber={displayStepNumber} title="탐색 전략 결정" isActive={isActive}>
+              <TimelineCard key={`${event.type}-${displayStepNumber}`} stepNumber={displayStepNumber} title="탐색 전략 결정" isActive={isActive}>
                 <p className="text-xs text-gray-800 font-medium">
                   • 다음 작업: <strong className="text-teal-800">{isSearch ? "지식베이스 특허 탐색" : isIngest ? "실시간 KIPRIS 수집" : "답변 및 리포트 가공"}</strong>
                 </p>
@@ -158,11 +190,10 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           }
 
           if (event.type === "agent_action") {
-            const agent = anyEvent.agent || "";
-            const isRetriever = agent === "retriever";
+            const isRetriever = event.agent === "retriever";
 
             return (
-              <TimelineCard key={idx} stepNumber={displayStepNumber} title={isRetriever ? "특허 문서 탐색" : "리포트 가공"} isActive={isActive}>
+              <TimelineCard key={`${event.type}-${displayStepNumber}`} stepNumber={displayStepNumber} title={isRetriever ? "특허 문서 탐색" : "리포트 가공"} isActive={isActive}>
                 <p className="text-xs text-gray-700 font-medium">
                   • {isRetriever ? "관련 특허 명세서를 대조 탐색 중입니다." : "검색 및 분석 결과를 정리하여 보고서를 작성 중입니다."}
                 </p>
@@ -171,13 +202,12 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
           }
 
           if (event.type === "agent_completed") {
-            const agent = anyEvent.agent || "";
-            const isRetriever = agent === "retriever";
-            const payload = anyEvent.payload || {};
+            const isRetriever = event.agent === "retriever";
+            const payload = event.payload ?? {};
             const sourceCount = payload.source_count || payload.sources_count;
 
             return (
-              <TimelineCard key={idx} stepNumber={displayStepNumber} title={isRetriever ? "탐색 완료" : "리포트 작성 완료"} isCompleted>
+              <TimelineCard key={`${event.type}-${displayStepNumber}`} stepNumber={displayStepNumber} title={isRetriever ? "탐색 완료" : "리포트 작성 완료"} isCompleted>
                 <p className="text-xs text-emerald-800 font-bold">
                   • {sourceCount !== undefined ? `가장 관련성이 높은 특허 ${String(sourceCount)}건 채택 완료` : "해당 검토 단계 완료"}
                 </p>
@@ -187,11 +217,12 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
 
           if (event.type === "auto_ingest_started" || event.type === "auto_ingest_completed") {
             const isDone = event.type === "auto_ingest_completed";
-            const eventData = anyEvent.data || {};
-            const saved = typeof eventData.patents_saved === "number" ? eventData.patents_saved : 0;
+            const saved = event.type === "auto_ingest_completed" && typeof event.data.patents_saved === "number"
+              ? event.data.patents_saved
+              : 0;
 
             return (
-              <TimelineCard key={idx} stepNumber={displayStepNumber} title={isDone ? "KIPRIS 자동 수집 완료" : "KIPRIS 자동 수집 시작"} isActive={!isDone && isActive} isCompleted={isDone}>
+              <TimelineCard key={`${event.type}-${displayStepNumber}`} stepNumber={displayStepNumber} title={isDone ? "KIPRIS 자동 수집 완료" : "KIPRIS 자동 수집 시작"} isActive={!isDone && isActive} isCompleted={isDone}>
                 <p className="text-xs text-gray-700">
                   • {isDone ? `공공 API 연동 특허 ${saved}건 지식베이스 등록 완료` : "KIPRIS API 실시간 수집 실행 중..."}
                 </p>
@@ -212,7 +243,6 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
         </button>
       )}
 
-      {/* 🛠️ 세부 알고리즘 정보 */}
       <div className="mt-2 border-t border-gray-100 pt-1.5 flex justify-end">
         <button
           onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
@@ -226,10 +256,9 @@ export default function AgentTimeline({ events }: { events: SearchStreamEvent[] 
       {showTechnicalDetails && (
         <div className="mt-2 rounded-lg bg-gray-900 p-3 font-mono text-[10px] text-gray-300 space-y-1">
           {timelineEvents.map((e, i) => {
-            const anyE = e as Record<string, any>;
             return (
               <div key={i} className="truncate text-gray-400">
-                <span className="text-teal-400">[{e.type}]</span> {JSON.stringify(anyE.data || anyE.decision || anyE.payload || {})}
+                <span className="text-teal-400">[{e.type}]</span> {JSON.stringify(getEventDetails(e))}
               </div>
             );
           })}
@@ -248,7 +277,7 @@ function TimelineCard({
 }: {
   stepNumber: number;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   isActive?: boolean;
   isCompleted?: boolean;
 }) {

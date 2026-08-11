@@ -1,6 +1,5 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { submitFeedback } from "@/lib/api";

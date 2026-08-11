@@ -1,7 +1,19 @@
+# ============================================================
+# 파일 역할: ClaimLens 분석 Service의 SSE 이벤트 순서와 payload 계약을 검증한다.
+#
+# 작성자: 심우현
+# 최종 수정일: 2026년 8월 11일
+#
+# 주요 책임:
+# - 기본 분석 이벤트 흐름 검증
+# - 기능 추출 tool/data 계약 검증
+# - 자동 수집 후 재검색 흐름 검증
+# ============================================================
+
 import unittest
 
 from app.ingestion.auto_ingest import AutoIngestResult
-from app.models.claimlens_api import ClaimLensAnalysisRequest
+from app.models.claimlens_api import ClaimLensAgentEvent, ClaimLensAnalysisRequest
 from app.services.claimlens_service import ClaimLensAnalysisService
 
 
@@ -39,23 +51,32 @@ class ClaimLensAnalysisServiceTest(unittest.IsolatedAsyncioTestCase):
             query_plan_builder=lambda query, intent_hint: _QueryPlan(),
             workflow_runner=lambda current_request, query: state,
             quality_evaluator=lambda current_state: _Decision(),
-            candidate_event_builder=lambda current_state: type(
-                "CandidateEvent",
-                (),
-                {"type": "tool_result"},
-            )(),
+            candidate_event_builder=lambda current_state: ClaimLensAgentEvent(
+                type="tool_result",
+                step="patent_search",
+                tool="search_claim_candidates",
+                data={"candidates": current_state["patent_candidates"]},
+            ),
             auto_ingest=None,
-            sse_encoder=lambda event: event.type,
+            sse_encoder=lambda event: event,
         )
 
         events = [event async for event in service.stream(request)]
+        event_types = [event.type for event in events]
 
-        self.assertEqual(events[0], "step_started")
-        self.assertIn("query_plan", events)
-        self.assertIn("supervisor_decision", events)
-        self.assertIn("claim_chart_row", events)
-        self.assertIn("final_report", events)
-        self.assertEqual(events[-1], "step_completed")
+        self.assertEqual(event_types[0], "step_started")
+        self.assertIn("query_plan", event_types)
+        self.assertIn("supervisor_decision", event_types)
+        self.assertIn("claim_chart_row", event_types)
+        self.assertIn("final_report", event_types)
+        self.assertEqual(event_types[-1], "step_completed")
+
+        feature_event = next(
+            event
+            for event in events
+            if event.type == "tool_result" and event.tool == "extract_product_features"
+        )
+        self.assertEqual(feature_event.data, {"features": ["검색"]})
 
     async def test_retries_after_successful_auto_ingest(self) -> None:
         request = ClaimLensAnalysisRequest(

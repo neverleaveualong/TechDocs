@@ -1,3 +1,15 @@
+# ============================================================
+# 파일 역할: 제품 기능과 특허 청구항 구성요소를 비교해 ClaimLens 결과를 생성한다.
+#
+# 작성자: 심우현
+# 최종 수정일: 2026년 8월 11일
+#
+# 주요 책임:
+# - 제품 설명에서 비교 기능 추출
+# - 청구항 구성요소와 제품 기능 매칭
+# - 후보 특허와 비교 차트의 API payload 생성
+# ============================================================
+
 from __future__ import annotations
 
 import re
@@ -265,6 +277,9 @@ def claim_candidate_to_dict(candidate: ClaimSearchCandidate) -> dict[str, object
             "id": candidate.patent.id,
             "applicationNumber": candidate.patent.application_number,
             "title": candidate.patent.title,
+            "applicantName": candidate.patent.applicant_name,
+            "registerStatus": candidate.patent.register_status,
+            "abstract": candidate.patent.abstract,
         },
         "claim": _claim_to_dict(candidate.claim),
         "claimElementCount": len(candidate.claim_elements),

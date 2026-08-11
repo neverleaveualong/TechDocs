@@ -12,14 +12,15 @@
 
 ## P0: 사용자 결과와 외부 계약
 
-### 1. ClaimLens Backend·Frontend 이벤트 계약 불일치
+### 1. ClaimLens Backend·Frontend 이벤트 계약 불일치 — 해결됨
 
-- Backend는 도구 결과를 `tool`, `data`로 전달하지만 Frontend 일부 코드는 `tool_name`, `result`를 읽습니다.
-- 차트 데이터도 Backend의 camelCase 필드와 Frontend의 snake_case 필드가 섞여 있고, 후보 특허의 중첩 구조도 서로 다릅니다.
-- 이 상태에서는 분석은 완료돼도 기능 목록, 후보 특허 및 비교 차트가 화면에 표시되지 않을 수 있습니다.
-- `Docs/API.md`를 단일 계약으로 삼아 이벤트 타입을 정의하고, Backend serializer와 Frontend parser가 같은 fixture를 사용하는 계약 테스트를 추가합니다.
+- 해결일: 2026년 8월 11일
+- Backend의 `tool`, `data`와 camelCase payload를 기준 계약으로 확정했습니다.
+- Frontend를 이벤트별 union type과 런타임 validator로 변경하고 기능, 후보 특허, 비교 차트 및 보고서 selector를 분리했습니다.
+- 후보 특허의 `patent` 중첩 구조와 `matched`, `partial`, `not_found`, `uncertain` 표시 규칙을 반영했습니다.
+- Backend serializer 테스트와 Frontend Vitest 계약 테스트를 추가했습니다.
 
-완료 조건: 대표 ClaimLens SSE fixture로 기능 추출, 후보 선택, 청구항 비교 및 차트 렌더링이 모두 검증됩니다.
+검증 기준: Backend unittest, Frontend 계약 테스트, lint, typecheck 및 build가 모두 통과해야 합니다.
 
 ### 2. 검색 결과가 없을 때 생성 답변의 근거 부족
 
@@ -120,21 +121,21 @@ Pinecone 재색인과 SQLite FTS 재구성은 관계형 스키마 migration과 �
 
 ## P1: 배포와 품질 게이트
 
-### 13. CI 검증 범위 부족
+### 13. CI 검증 범위 부족 — 해결됨
 
-- 현재 CI는 제한적인 Python compile·import와 Frontend build 위주여서 Backend 테스트와 Frontend lint 실패를 막지 못합니다.
-- Backend `unittest`, Frontend lint, TypeScript 검사 및 build를 필수 job으로 구성하고 필요하면 계약 테스트를 별도로 둡니다.
+- 해결일: 2026년 8월 11일
+- Backend compile·unittest와 Frontend 계약 테스트·lint·TypeScript 검사·build를 CI에 연결했습니다.
 
 현재 점검 기준은 다음과 같습니다.
 
 - Backend compile: 통과
-- Backend `python -m unittest discover -s tests -v`: 31개 통과
+- Backend `python -m unittest discover -s tests -v`: 32개 통과
 - Frontend `npx tsc --noEmit`: 통과
 - Frontend `npm run build`: 통과
-- Frontend `npm run lint`: 11개 오류, 2개 경고로 실패
-- Frontend 자동화 테스트: 없음
+- Frontend `npm run lint`: 통과
+- Frontend `npm run test`: ClaimLens 계약 테스트 4개 통과
 
-완료 조건: 로컬 하네스와 CI가 같은 명령을 사용하고 필수 검증 실패 시 PR 병합이 차단됩니다.
+검증 기준: 로컬 하네스와 CI가 같은 명령을 사용하고 필수 검증 실패 시 PR 병합이 차단됩니다.
 
 ### 14. Docker 실행 계약 불일치
 

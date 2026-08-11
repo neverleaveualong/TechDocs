@@ -1,3 +1,15 @@
+# ============================================================
+# 파일 역할: ClaimLens 기능 추출과 API payload 변환의 회귀 동작을 검증한다.
+#
+# 작성자: 심우현
+# 최종 수정일: 2026년 8월 11일
+#
+# 주요 책임:
+# - 제품 기능 분해 결과 검증
+# - 초록 전용 후보의 차트 제외 검증
+# - 후보 특허 payload 계약 검증
+# ============================================================
+
 from __future__ import annotations
 
 import os
@@ -16,7 +28,11 @@ def _ensure_test_env() -> None:
 
 _ensure_test_env()
 
-from app.core.claimlens.feature_matcher import build_claim_chart_rows, extract_product_features  # noqa: E402
+from app.core.claimlens.feature_matcher import (  # noqa: E402
+    build_claim_chart_rows,
+    claim_candidate_to_dict,
+    extract_product_features,
+)
 from app.core.claimlens.vector_search import (  # noqa: E402
     TEXT_TYPE_PATENT_ABSTRACT,
     ClaimSearchCandidate,
@@ -56,6 +72,40 @@ class ClaimLensFeatureMatcherTest(unittest.TestCase):
         rows = build_claim_chart_rows([candidate], ["특허 데이터를 분석한다"])
 
         self.assertEqual(rows, [])
+
+    def test_candidate_payload_includes_nested_patent_summary(self) -> None:
+        candidate = ClaimSearchCandidate(
+            vector_id="patent:1:claim:1",
+            score=0.82,
+            matched_text="센서 데이터를 분석하는 단계",
+            matched_text_type="independent_claim",
+            patent=PatentSearchRecord(
+                id=1,
+                application_number="1020240000001",
+                title="센서 데이터 분석 장치",
+                abstract="센서 데이터를 이용한 분석 장치",
+                applicant_name="테크독스",
+                register_status="등록",
+            ),
+            claim=None,
+            matched_claim_element=None,
+            claim_elements=[],
+        )
+
+        payload = claim_candidate_to_dict(candidate)
+
+        self.assertEqual(payload["vectorId"], "patent:1:claim:1")
+        self.assertEqual(
+            payload["patent"],
+            {
+                "id": 1,
+                "applicationNumber": "1020240000001",
+                "title": "센서 데이터 분석 장치",
+                "applicantName": "테크독스",
+                "registerStatus": "등록",
+                "abstract": "센서 데이터를 이용한 분석 장치",
+            },
+        )
 
 
 if __name__ == "__main__":
