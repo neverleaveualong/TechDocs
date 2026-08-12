@@ -22,6 +22,7 @@
 
 - [`API.md`](API.md): 일반 JSON, 검색 NDJSON 및 ClaimLens SSE 계약
 - [`DATABASE.md`](DATABASE.md): 관계형 DB, SQLite FTS5 및 Pinecone 저장 구조
+- [`DATABASE_REVIEW.md`](DATABASE_REVIEW.md): DB 컬럼 사용처, RAG·ClaimLens 흐름 및 리팩토링 판단 기준
 - [`PAIN_POINTS.md`](PAIN_POINTS.md): 전체 코드 점검 결과와 우선순위별 리팩토링 백로그
 
 ## 문서 관리 원칙
