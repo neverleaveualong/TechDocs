@@ -4,6 +4,8 @@
 - 목적: DB 컬럼의 실제 사용처를 설명하고, 일반 RAG 검색과 ClaimLens 분석을 구분하여 향후 리팩토링 판단 기준을 제공합니다.
 - 범위: 현재 SQLAlchemy 모델, 수집 파이프라인, RAG 검색, ClaimLens 파서 및 자동 수집 구현의 AS-IS 분석입니다.
 
+ClaimLens의 목표 사용자 흐름, 실제 특허 표본 검증 및 비교 엔진 재설계는 [`CLAIMLENS_REDESIGN.md`](CLAIMLENS_REDESIGN.md)에서 설명합니다.
+
 ## 먼저 이해할 두 가지 서비스 흐름
 
 TechDocs의 일반 검색과 ClaimLens는 같은 Pinecone index를 사용하지만 namespace, 데이터 단위 및 결과 생성 방식이 다릅니다.
